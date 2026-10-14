@@ -44,18 +44,6 @@ curl http://localhost:3001/api/auth/me \
 # → 200 {"user":{"id":1,"email":"test@team.com"}}
 ```
 
-## Deliverables
-
-| Feature | Status |
-|---------|--------|
-| Express + TS server | ✅ |
-| MySQL + migrations (5 tables) | ✅ |
-| JWT Auth (register, login, me) | ✅ |
-| Protected middleware | ✅ |
-| Env config | ✅ |
-| Health check | ✅ |
-| CORS for frontend | ✅ |
-
 ## Database Tables
 
 - `users` - authentication
