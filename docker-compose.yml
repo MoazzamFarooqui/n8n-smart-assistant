@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8
+    container_name: n8n-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: n8n_smart_assist
+      MYSQL_USER: n8n_user
+      MYSQL_PASSWORD: n8n_pass
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: n8n-backend
+    environment:
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=n8n_user
+      - DB_PASSWORD=n8n_pass
+      - DB_NAME=n8n_smart_assist
+      - FRONTEND_URL=http://localhost:5173
+      - NODE_ENV=development
+    ports:
+      - "3001:3001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+
+volumes:
+  mysql_data:
