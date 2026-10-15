@@ -6,4 +6,5 @@ dist/
 coverage/
 .nyc_output/
 run-migration.ts
-reset-root-password.sqlmysql_data/
+reset-root-password.sql
+mysql_data/
