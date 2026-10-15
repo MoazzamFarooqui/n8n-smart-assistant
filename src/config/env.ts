@@ -27,6 +27,15 @@ export const config = {
   },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY || '',
+    model: process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
+    fallbackModels: (process.env.GEMINI_FALLBACK_MODELS || 'gemini-flash-lite-latest,gemini-3.6-flash,gemini-3.5-flash')
+      .split(',')
+      .map((m) => m.trim())
+      .filter(Boolean),
+    maxOutputTokens: parseInt(process.env.GEMINI_MAX_OUTPUT_TOKENS || '2048', 10),
+    temperature: parseFloat(process.env.GEMINI_TEMPERATURE || '0.7'),
+    timeoutMs: parseInt(process.env.GEMINI_TIMEOUT_MS || '10000', 10),
+    maxRetries: parseInt(process.env.GEMINI_MAX_RETRIES || '1', 10),
   },
   n8n: {
     apiUrl: process.env.N8N_API_URL || 'http://localhost:5678/api/v1',
