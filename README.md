@@ -1,6 +1,6 @@
-# n8n Smart Assistant - Backend (Phase 1)
+# n8n Smart Assistant - Backend
 
-Express + TypeScript + MySQL + JWT Auth
+Express + TypeScript + MySQL + JWT Auth + Google Gemini AI
 
 ## Quick Start
 
@@ -10,13 +10,37 @@ npm install
 
 # 2. Configure env
 cp .env.example .env
-# Edit .env with your MySQL credentials
+# Edit .env with your MySQL credentials and GEMINI_API_KEY
 
 # 3. Run migration (creates 5 tables)
 npm run db:migrate
 
 # 4. Start server
 npm run dev
+```
+
+## Phase 2 - AI Endpoints
+
+8 AI features under `/api/ai` (all require a JWT token):
+
+| Method & Path | Feature |
+|---------------|---------|
+| `POST /api/ai/chat` | AI Mentor Chatbot |
+| `POST /api/ai/explain-node` | Explain This Node |
+| `POST /api/ai/explain-workflow` | JSON Workflow Explainer |
+| `POST /api/ai/generate-workflow` | AI Workflow Generator |
+| `POST /api/ai/validate-workflow` | Workflow Validation |
+| `POST /api/ai/translate-error` | Error Message Translator |
+| `POST /api/ai/compatibility` | Integration Compatibility Advisor |
+| `POST /api/ai/security-audit` | Workflow Security Auditor |
+
+Full details, request examples and file map: **[docs/PHASE2.md](docs/PHASE2.md)**
+
+### Test everything
+
+```bash
+npm run dev         # terminal 1
+npm run test:smoke  # terminal 2 → 11/11 passed
 ```
 
 ## Verify Phase 1
@@ -63,8 +87,10 @@ curl http://localhost:3001/api/auth/me \
 ## Scripts
 
 ```bash
-npm run dev      # Dev with hot reload
-npm run build    # Compile to dist/
-npm start        # Run production build
-npm run db:migrate  # Run SQL migration
+npm run dev           # Dev with hot reload
+npm run build         # Compile to dist/
+npm start             # Run production build
+npm run db:migrate    # Run SQL migration
+npm run test:smoke    # Quick check of all endpoints
+npm run verify:phase2 # Full Phase 2 verification (15 checks)
 ```
