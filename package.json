@@ -7,7 +7,9 @@
     "dev": "tsx watch src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
-    "db:migrate": "mysql -u root -p < migrations/001_initial_schema.sql"
+    "db:migrate": "mysql -u root -p < migrations/001_initial_schema.sql",
+    "test:smoke": "tsx scripts/smoke-test.ts",
+    "verify:phase2": "tsx scripts/verify-phase2.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.15.0",
