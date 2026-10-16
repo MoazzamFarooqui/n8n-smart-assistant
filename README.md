@@ -93,6 +93,9 @@ n8n                    # terminal 2 (n8n instance)
 npm run verify:phase3  # terminal 3 → 14/14 passed
 ```
 
+How to verify every Phase 3 feature step by step (with commands, expected
+results, and n8n browser proofs): **[docs/PHASE3-VERIFICATION.md](docs/PHASE3-VERIFICATION.md)**
+
 ## Verification
 
 | Command | What it checks | Expected |
@@ -100,6 +103,8 @@ npm run verify:phase3  # terminal 3 → 14/14 passed
 | `npm run test:smoke` | All endpoints respond | 11/11 passed |
 | `npm run verify:phase2` | All 8 AI skills + auth + validation | 15/15 passed |
 | `npm run verify:phase3` | Full n8n lifecycle (create → update → activate → execute → results → delete) | 14/14 passed |
+
+Step-by-step manual verification for Phase 3: **[docs/PHASE3-VERIFICATION.md](docs/PHASE3-VERIFICATION.md)** (start services → check each feature one by one → n8n browser proofs → troubleshooting)
 
 ## Database Tables
 
