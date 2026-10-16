@@ -39,6 +39,9 @@ export const config = {
   },
   n8n: {
     apiUrl: process.env.N8N_API_URL || 'http://localhost:5678/api/v1',
+    publicUrl: (process.env.N8N_PUBLIC_URL || 'http://localhost:5678').replace(/\/+$/, ''),
     apiKey: process.env.N8N_API_KEY || '',
+    timeoutMs: parseInt(process.env.N8N_TIMEOUT_MS || '15000', 10),
+    maxRetries: parseInt(process.env.N8N_MAX_RETRIES || '2', 10),
   },
 };
