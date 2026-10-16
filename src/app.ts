@@ -7,6 +7,7 @@ import { testConnection } from './config/db.js';
 import authRoutes from './routes/auth.js';
 import healthRoutes from './routes/health.js';
 import aiRoutes from './routes/ai.js';
+import n8nRoutes from './routes/n8n.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 process.on('unhandledRejection', (reason) => {
@@ -27,6 +28,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api', healthRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/n8n', n8nRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
