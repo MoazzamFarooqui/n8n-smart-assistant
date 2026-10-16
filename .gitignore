@@ -8,4 +8,4 @@ coverage/
 run-migration.ts
 reset-root-password.sql
 mysql_data/
-docs/
+local-notes/
