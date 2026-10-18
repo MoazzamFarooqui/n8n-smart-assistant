@@ -9,6 +9,7 @@ import {
   getWorkflowById,
   getWorkflowsByUserIdPaginated,
   updateWorkflow,
+  deleteWorkflow as deleteWorkflowRow,
   type Workflow,
 } from '../models/Workflow.js';
 import {
@@ -283,6 +284,39 @@ router.patch('/:id/deactivate', authenticate, async (req: AuthRequest, res: Resp
   } catch (error) {
     sendError(res, error);
   }
+});
+
+router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+  const workflow = await findOwnedWorkflow(req, res);
+  if (!workflow) return;
+
+  let n8nDeleted = false;
+  if (workflow.n8n_workflow_id) {
+    try {
+      if (workflow.is_active) {
+        await n8n.deactivateWorkflow(workflow.n8n_workflow_id).catch(() => undefined);
+      }
+      await n8n.deleteWorkflow(workflow.n8n_workflow_id);
+      n8nDeleted = true;
+    } catch (error) {
+      if (error instanceof N8nError && error.n8nStatus === 404) {
+        n8nDeleted = false;
+      } else {
+        return sendError(res, error);
+      }
+    }
+  }
+
+  await deleteWorkflowRow(workflow.id);
+
+  res.json({
+    id: workflow.id,
+    name: workflow.name,
+    deleted: true,
+    n8nDeleted,
+    n8nWorkflowId: workflow.n8n_workflow_id,
+    ...(workflow.n8n_workflow_id && !n8nDeleted ? { note: 'Workflow was already missing from n8n' } : {}),
+  });
 });
 
 export default router;
