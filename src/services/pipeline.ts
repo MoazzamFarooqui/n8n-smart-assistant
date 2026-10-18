@@ -129,13 +129,15 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
   const work: CleanWorkflow = { name, nodes, connections };
 
   const webhookPath = `aies-${randomUUID().slice(0, 8)}`;
+  const hasRespondNode = nodes.some((n) => n.type === 'n8n-nodes-base.respondToWebhook');
+  const responseMode = hasRespondNode ? 'responseNode' : 'lastNode';
   const existingWebhook = nodes.find((n) => n.type === WEBHOOK_TYPE);
   if (existingWebhook) {
     existingWebhook.parameters = {
       ...(existingWebhook.parameters ?? {}),
       path: webhookPath,
       httpMethod: (existingWebhook.parameters as any)?.httpMethod || 'POST',
-      responseMode: (existingWebhook.parameters as any)?.responseMode || 'lastNode',
+      responseMode,
     };
   } else {
     const webhook: N8nNode = {
@@ -143,7 +145,7 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
       type: WEBHOOK_TYPE,
       typeVersion: 2,
       position: [-220, 0],
-      parameters: { httpMethod: 'POST', path: webhookPath, responseMode: 'lastNode', options: {} },
+      parameters: { httpMethod: 'POST', path: webhookPath, responseMode, options: {} },
     };
     while (usedNames.has(webhook.name)) webhook.name = `${webhook.name} 2`;
     usedNames.add(webhook.name);
