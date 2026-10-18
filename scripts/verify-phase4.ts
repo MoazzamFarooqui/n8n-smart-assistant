@@ -152,11 +152,16 @@ async function main() {
 
   // cleanup: remove the deployed test workflows from n8n
   console.log('\n  (cleanup) removing test workflows from n8n…');
+  let cleaned = 0;
   for (const id of deployed) {
     await req('PATCH', `/api/n8n/workflows/${id}/deactivate`, undefined, token).catch(() => {});
-    await req('DELETE', `/api/n8n/workflows/${id}`, undefined, token).catch(() => {});
+    const del = await req('DELETE', `/api/n8n/workflows/${id}`, undefined, token).catch(
+      () => ({ status: 0 })
+    );
+    if (del.status === 200) cleaned++;
+    else console.log(`  WARN: could not delete ${id} (status ${del.status}) — remove it manually in n8n`);
   }
-  console.log(`  cleaned ${deployed.length} n8n workflow(s)`);
+  console.log(`  cleaned ${cleaned}/${deployed.length} n8n workflow(s)`);
 
   console.log(`\n=== RESULT: ${passed} passed, ${failed} failed ===\n`);
   process.exit(failed === 0 ? 0 : 1);
