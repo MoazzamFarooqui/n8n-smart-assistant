@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.js';
 import healthRoutes from './routes/health.js';
 import aiRoutes from './routes/ai.js';
 import n8nRoutes from './routes/n8n.js';
+import workflowRoutes from './routes/workflows.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 process.on('unhandledRejection', (reason) => {
@@ -29,6 +30,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', healthRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/n8n', n8nRoutes);
+app.use('/api/workflows', workflowRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
 
