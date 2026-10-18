@@ -251,4 +251,38 @@ router.post('/:id/execute', authenticate, async (req: AuthRequest, res: Response
   }
 });
 
+router.patch('/:id/activate', authenticate, async (req: AuthRequest, res: Response) => {
+  const workflow = await findOwnedWorkflow(req, res);
+  if (!workflow) return;
+
+  if (!workflow.n8n_workflow_id) {
+    return res.status(409).json({ error: 'Workflow has not been deployed to n8n yet', workflowId: workflow.id });
+  }
+
+  try {
+    await n8n.activateWorkflow(workflow.n8n_workflow_id);
+    await updateWorkflow(workflow.id, { is_active: true });
+    res.json({ id: workflow.id, name: workflow.name, is_active: true });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+router.patch('/:id/deactivate', authenticate, async (req: AuthRequest, res: Response) => {
+  const workflow = await findOwnedWorkflow(req, res);
+  if (!workflow) return;
+
+  if (!workflow.n8n_workflow_id) {
+    return res.status(409).json({ error: 'Workflow has not been deployed to n8n yet', workflowId: workflow.id });
+  }
+
+  try {
+    await n8n.deactivateWorkflow(workflow.n8n_workflow_id);
+    await updateWorkflow(workflow.id, { is_active: false });
+    res.json({ id: workflow.id, name: workflow.name, is_active: false });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
 export default router;
