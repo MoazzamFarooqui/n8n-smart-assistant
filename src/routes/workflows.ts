@@ -1,13 +1,14 @@
 import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
-import { runPipeline, PipelineError } from '../services/pipeline.js';
+import { runPipeline, rerunWorkflow, PipelineError } from '../services/pipeline.js';
 import * as n8n from '../services/n8n.js';
 import { N8nError } from '../services/n8n.js';
 import { config } from '../config/env.js';
 import {
   getWorkflowById,
   getWorkflowsByUserIdPaginated,
+  updateWorkflow,
   type Workflow,
 } from '../models/Workflow.js';
 import {
@@ -66,6 +67,10 @@ const listQuerySchema = z.object({
 const executionsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(10),
+});
+
+const executeSchema = z.object({
+  payload: z.any().optional(),
 });
 
 router.post('/generate-and-deploy', authenticate, async (req: AuthRequest, res: Response) => {
@@ -198,6 +203,50 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       n8n: n8nInfo,
     });
   } catch (error) {
+    sendError(res, error);
+  }
+});
+
+router.post('/:id/execute', authenticate, async (req: AuthRequest, res: Response) => {
+  const parsed = executeSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ errors: parsed.error.flatten() });
+
+  const workflow = await findOwnedWorkflow(req, res);
+  if (!workflow) return;
+
+  if (!workflow.n8n_workflow_id) {
+    return res.status(409).json({
+      error: 'Workflow has not been deployed to n8n yet',
+      workflowId: workflow.id,
+    });
+  }
+
+  try {
+    const result = await rerunWorkflow(req.user!.id, workflow, parsed.data.payload ?? {});
+    res.json({
+      workflowId: workflow.id,
+      n8nWorkflowId: workflow.n8n_workflow_id,
+      n8nWorkflowUrl: n8nWorkflowUrl(workflow.n8n_workflow_id),
+      status: result.status,
+      execution: {
+        id: result.dbExecutionId,
+        n8nExecutionId: result.n8nExecutionId ?? null,
+        ...(result.status === 'success'
+          ? { output: result.data }
+          : { error: result.error, errorAnalysis: result.errorAnalysis }),
+      },
+      webhookUrl: result.webhookUrl,
+      ms: result.ms,
+    });
+  } catch (error) {
+    if (error instanceof N8nError && error.n8nStatus === 404) {
+      await updateWorkflow(workflow.id, { is_active: false });
+      return res.status(404).json({
+        error: 'This workflow no longer exists in n8n (it may have been deleted there).',
+        workflowId: workflow.id,
+        n8nStatus: 404,
+      });
+    }
     sendError(res, error);
   }
 });
