@@ -38,16 +38,20 @@ function isRetryable(err: any): boolean {
 
 async function generateWithModel(
   modelName: string,
-  fullPrompt: string
+  fullPrompt: string,
+  thinking: boolean
 ): Promise<AIResponse> {
+  const generationConfig: any = {
+    maxOutputTokens: config.gemini.maxOutputTokens,
+    temperature: config.gemini.temperature,
+  };
+  if (thinking) {
+    generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
   const model = getClient().getGenerativeModel(
     {
       model: modelName,
-      generationConfig: {
-        maxOutputTokens: config.gemini.maxOutputTokens,
-        temperature: config.gemini.temperature,
-        thinkingConfig: { thinkingBudget: 0 },
-      } as any,
+      generationConfig,
     },
     { timeout: config.gemini.timeoutMs }
   );
@@ -66,12 +70,13 @@ async function generateWithModel(
 async function generateWithRetry(
   modelName: string,
   fullPrompt: string,
-  attempts: number
+  attempts: number,
+  thinking: boolean
 ): Promise<AIResponse> {
   let lastError: any;
   for (let i = 0; i < attempts; i++) {
     try {
-      return await generateWithModel(modelName, fullPrompt);
+      return await generateWithModel(modelName, fullPrompt, thinking);
     } catch (err: any) {
       lastError = err;
       if (!isRetryable(err) || i === attempts - 1) {
@@ -90,16 +95,23 @@ export async function callGemini(
   const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
   const models = [config.gemini.model, ...config.gemini.fallbackModels];
 
-  let lastError: unknown;
+  let lastError: any;
   for (const modelName of models) {
-    try {
-      return await generateWithRetry(modelName, fullPrompt, config.gemini.maxRetries);
-    } catch (err: any) {
-      lastError = err;
-      if (!isRetryable(err)) {
+    for (const thinking of [true, false]) {
+      try {
+        return await generateWithRetry(modelName, fullPrompt, config.gemini.maxRetries, thinking);
+      } catch (err: any) {
+        lastError = err;
+        if (thinking && err?.status === 400) {
+          console.warn(`Model ${modelName} rejected thinkingConfig (400) — retrying without thinking...`);
+          continue;
+        }
+        if (err?.status === 400 || isRetryable(err)) {
+          console.warn(`Model ${modelName} unavailable (${err?.status ?? err?.message ?? 'error'}), trying next fallback...`);
+          break;
+        }
         throw err;
       }
-      console.warn(`Model ${modelName} unavailable (${err?.status ?? err?.message ?? 'error'}), trying next fallback...`);
     }
   }
   throw lastError;
