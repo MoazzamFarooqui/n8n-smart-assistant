@@ -83,6 +83,79 @@ function safeExtractJson(text: string): { parsed?: unknown; raw?: string } {
   }
 }
 
+const SET_NODE_TYPE = 'n8n-nodes-base.set';
+const SET_NODE_VERSION = 3.5;
+
+interface SetAssignment {
+  id: string;
+  name: string;
+  value: unknown;
+  type: string;
+}
+
+function toAssignment(rawType: unknown, rawValue: unknown): { type: string; value: unknown } {
+  const t = typeof rawType === 'string' ? rawType : 'string';
+  switch (t) {
+    case 'number':
+    case 'numberValue':
+      return { type: 'number', value: Number(rawValue) };
+    case 'boolean':
+    case 'booleanValue':
+      return { type: 'boolean', value: rawValue === true || rawValue === 'true' };
+    case 'array':
+    case 'arrayValue':
+      return { type: 'array', value: rawValue };
+    case 'object':
+    case 'objectValue':
+      return { type: 'object', value: rawValue };
+    default:
+      return { type: 'string', value: String(rawValue ?? '') };
+  }
+}
+
+function normalizeSetNode(parameters: any): { parameters: any; version?: number } | undefined {
+  const p = parameters ?? {};
+  const items: SetAssignment[] = [];
+
+  const push = (name: unknown, type: string, value: unknown) => {
+    if (name === undefined || name === null || String(name).trim() === '') return;
+    items.push({ id: randomUUID(), name: String(name), ...toAssignment(type, value) });
+  };
+
+  if (Array.isArray(p.assignments?.assignments)) {
+    for (const a of p.assignments.assignments) {
+      push(a?.name, String(a?.type ?? 'string'), a?.value);
+    }
+  } else if (Array.isArray(p.fields?.values)) {
+    for (const f of p.fields.values) {
+      push(f?.name, String(f?.type ?? 'stringValue'), f?.[String(f?.type ?? 'stringValue')]);
+    }
+  } else if (p.values && typeof p.values === 'object') {
+    for (const t of ['string', 'number', 'boolean'] as const) {
+      for (const it of Array.isArray(p.values[t]) ? p.values[t] : []) {
+        push(it?.name, t, it?.value);
+      }
+    }
+  } else {
+    return undefined;
+  }
+
+  if (items.length === 0) return undefined;
+
+  const includeOther =
+    p.include === 'all' || p.include === 'selected' || p.includeOtherFields === true;
+
+  return {
+    version: SET_NODE_VERSION,
+    parameters: {
+      mode: 'manual',
+      ...(includeOther ? { includeOtherFields: true } : {}),
+      assignments: { assignments: items },
+      options: p.options ?? {},
+    },
+  };
+}
+
 function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('AI response was not a JSON workflow object');
@@ -97,7 +170,7 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
     let name = typeof node?.name === 'string' && node.name.trim() ? node.name.trim() : `Node ${i + 1}`;
     while (usedNames.has(name)) name = `${name} (${i + 1})`;
     usedNames.add(name);
-    return {
+    const built: N8nNode = {
       ...node,
       name,
       type: typeof node?.type === 'string' && node.type.includes('.') ? node.type : 'n8n-nodes-base.noOp',
@@ -105,6 +178,14 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
       position: Array.isArray(node?.position) && node.position.length === 2 ? node.position : [i * 220, 0],
       parameters: node?.parameters && typeof node.parameters === 'object' ? node.parameters : {},
     };
+    if (built.type === SET_NODE_TYPE) {
+      const normalized = normalizeSetNode(built.parameters);
+      if (normalized) {
+        built.parameters = normalized.parameters;
+        built.typeVersion = normalized.version ?? built.typeVersion;
+      }
+    }
+    return built;
   });
 
   const name =
