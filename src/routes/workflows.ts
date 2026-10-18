@@ -2,9 +2,18 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { runPipeline, PipelineError } from '../services/pipeline.js';
+import * as n8n from '../services/n8n.js';
 import { N8nError } from '../services/n8n.js';
 import { config } from '../config/env.js';
-import { getWorkflowsByUserIdPaginated } from '../models/Workflow.js';
+import {
+  getWorkflowById,
+  getWorkflowsByUserIdPaginated,
+  type Workflow,
+} from '../models/Workflow.js';
+import {
+  getWorkflowExecutionsByWorkflowIdPaginated,
+  getExecutionStatsByWorkflowId,
+} from '../models/WorkflowExecution.js';
 
 const router = Router();
 
@@ -28,6 +37,21 @@ function n8nWorkflowUrl(n8nWorkflowId: string | null): string | null {
   return n8nWorkflowId ? `${config.n8n.publicUrl}/workflow/${n8nWorkflowId}` : null;
 }
 
+async function findOwnedWorkflow(req: AuthRequest, res: Response): Promise<Workflow | null> {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: 'Invalid workflow id' });
+    return null;
+  }
+
+  const workflow = await getWorkflowById(id);
+  if (!workflow || workflow.user_id !== req.user!.id) {
+    res.status(404).json({ error: 'Workflow not found' });
+    return null;
+  }
+  return workflow;
+}
+
 const generateAndDeploySchema = z.object({
   prompt: z.string().trim().min(10, 'prompt must be at least 10 characters').max(2000, 'prompt is too long'),
 });
@@ -37,6 +61,11 @@ const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(10),
   status: z.enum(['active', 'inactive']).optional(),
   search: z.string().trim().min(1).max(100).optional(),
+});
+
+const executionsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(10),
 });
 
 router.post('/generate-and-deploy', authenticate, async (req: AuthRequest, res: Response) => {
@@ -92,6 +121,81 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
         last_executed_at: w.last_executed_at ?? null,
       })),
       pagination: paginationMeta(page, limit, total),
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+router.get('/:id/executions', authenticate, async (req: AuthRequest, res: Response) => {
+  const parsed = executionsQuerySchema.safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ errors: parsed.error.flatten() });
+
+  const workflow = await findOwnedWorkflow(req, res);
+  if (!workflow) return;
+
+  try {
+    const { rows, total } = await getWorkflowExecutionsByWorkflowIdPaginated(workflow.id, parsed.data);
+    res.json({
+      workflowId: workflow.id,
+      data: rows,
+      pagination: paginationMeta(parsed.data.page, parsed.data.limit, total),
+    });
+  } catch (error) {
+    sendError(res, error);
+  }
+});
+
+router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+  const workflow = await findOwnedWorkflow(req, res);
+  if (!workflow) return;
+
+  try {
+    const [stats, history] = await Promise.all([
+      getExecutionStatsByWorkflowId(workflow.id),
+      getWorkflowExecutionsByWorkflowIdPaginated(workflow.id, { page: 1, limit: 10 }),
+    ]);
+
+    let n8nInfo: Record<string, unknown>;
+    if (!workflow.n8n_workflow_id) {
+      n8nInfo = { available: false, error: 'Workflow has not been deployed to n8n yet' };
+    } else {
+      try {
+        const live = await n8n.getWorkflow(workflow.n8n_workflow_id);
+        n8nInfo = {
+          available: true,
+          id: live.id,
+          name: live.name,
+          active: n8n.isWorkflowActive(live),
+          nodes: live.nodes,
+          connections: live.connections,
+          updatedAt: live.updatedAt ?? null,
+        };
+      } catch (error) {
+        n8nInfo = {
+          available: false,
+          error: error instanceof N8nError ? error.message : 'Could not reach n8n',
+          n8nStatus: error instanceof N8nError ? error.n8nStatus : undefined,
+        };
+      }
+    }
+
+    res.json({
+      workflow: {
+        id: workflow.id,
+        name: workflow.name,
+        description: workflow.description,
+        prompt: workflow.prompt,
+        definition: workflow.definition,
+        is_active: Boolean(workflow.is_active),
+        n8n_workflow_id: workflow.n8n_workflow_id,
+        n8nWorkflowUrl: n8nWorkflowUrl(workflow.n8n_workflow_id),
+        created_at: workflow.created_at,
+        updated_at: workflow.updated_at,
+      },
+      executionStats: stats,
+      executions: history.rows,
+      n8n: n8nInfo,
     });
   } catch (error) {
     sendError(res, error);
