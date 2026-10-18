@@ -128,6 +128,34 @@ npm run verify:phase4  # terminal 3 → 12/12 passed (runs 2 real pipelines, ~2-
 How to verify every Phase 4 feature step by step (success path, error path, DB proof,
 n8n browser proofs): **[docs/PHASE4-VERIFICATION.md](docs/PHASE4-VERIFICATION.md)**
 
+## Phase 5 - Workflow Management CRUD
+
+Manage your saved workflows end to end (all require a JWT token; every endpoint is
+owner-scoped — other users get 404):
+
+| Method & Path | Feature |
+|---------------|---------|
+| `GET /api/workflows` | Paginated list (`?page`, `?limit`, `?status=active\|inactive`, `?search=`) with execution counters |
+| `GET /api/workflows/:id` | Detail: definition JSON + live n8n JSON + execution stats + recent executions |
+| `GET /api/workflows/:id/executions` | Paginated execution history |
+| `POST /api/workflows/:id/execute` | Re-execute (auto-activates; records the run; AI error analysis on failure) |
+| `PATCH /api/workflows/:id/activate` | Activate in n8n + DB |
+| `PATCH /api/workflows/:id/deactivate` | Deactivate in n8n + DB |
+| `DELETE /api/workflows/:id` | Delete from n8n + DB (unpublishes first; executions cascade) |
+
+Re-execution runs the deployed workflow through its webhook, saves every run in
+`workflow_executions` (with the n8n execution id) and, when a run fails, stores an
+AI-generated `error_analysis` — so failures come back as plain-English explanations.
+
+```bash
+npm run dev            # terminal 1 (our server)
+n8n                    # terminal 2 (n8n instance)
+npm run verify:phase5  # terminal 3 → 21/21 passed (runs 2 real workflows, ~3-5 min)
+```
+
+How to verify every Phase 5 feature step by step (list, detail, re-run, error
+analysis, delete, ownership isolation): **[docs/PHASE5-VERIFICATION.md](docs/PHASE5-VERIFICATION.md)**
+
 ## Verification
 
 | Command | What it checks | Expected |
@@ -136,8 +164,9 @@ n8n browser proofs): **[docs/PHASE4-VERIFICATION.md](docs/PHASE4-VERIFICATION.md
 | `npm run verify:phase2` | All 8 AI skills + auth + validation | 15/15 passed |
 | `npm run verify:phase3` | Full n8n lifecycle (create → update → activate → execute → results → delete) | 14/14 passed |
 | `npm run verify:phase4` | Full pipeline against live Gemini + n8n (success path + failure analysis) | 12/12 passed |
+| `npm run verify:phase5` | Full management CRUD against live Gemini + n8n (list → detail → re-run → toggle → delete) | 21/21 passed |
 
-Step-by-step manual verification: **[docs/PHASE4-VERIFICATION.md](docs/PHASE4-VERIFICATION.md)** (Phase 4) · **[docs/PHASE3-VERIFICATION.md](docs/PHASE3-VERIFICATION.md)** (Phase 3)
+Step-by-step manual verification: **[docs/PHASE5-VERIFICATION.md](docs/PHASE5-VERIFICATION.md)** (Phase 5) · **[docs/PHASE4-VERIFICATION.md](docs/PHASE4-VERIFICATION.md)** (Phase 4) · **[docs/PHASE3-VERIFICATION.md](docs/PHASE3-VERIFICATION.md)** (Phase 3)
 
 ## Database Tables
 
@@ -158,6 +187,7 @@ npm run test:smoke    # Quick check of all endpoints
 npm run verify:phase2 # Full Phase 2 verification (15 checks)
 npm run verify:phase3 # Full Phase 3 verification against n8n (14 checks)
 npm run verify:phase4 # Full Phase 4 pipeline verification (12 checks)
+npm run verify:phase5 # Full Phase 5 management CRUD verification (21 checks)
 ```
 
 ## Troubleshooting
@@ -172,3 +202,4 @@ npm run verify:phase4 # Full Phase 4 pipeline verification (12 checks)
 | Pipeline 502 at "generate" + 429 | Gemini rate limit (free tier) — wait and retry; fallback models are automatic |
 | `Unknown column 'n8n_workflow_id'` | New migrations not applied → `npm run db:migrate` |
 | Pipeline `status: "failed"` + credential error | Not a bug — read `errorAnalysis` or add credentials in n8n |
+| Re-execute returns 404 | The workflow was deleted from n8n manually — generate/deploy it again |
