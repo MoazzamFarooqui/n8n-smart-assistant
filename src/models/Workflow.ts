@@ -5,10 +5,18 @@ export interface Workflow {
   user_id: number;
   name: string;
   description: string | null;
+  prompt: string | null;
   definition: object;
   is_active: boolean;
+  n8n_workflow_id: string | null;
   created_at: Date;
   updated_at: Date;
+}
+
+export interface WorkflowListRow extends Workflow {
+  execution_count: number;
+  last_execution_status: string | null;
+  last_executed_at: Date | null;
 }
 
 export interface CreateWorkflowInput {
@@ -45,6 +53,53 @@ export async function getWorkflowById(id: number): Promise<Workflow | null> {
 export async function getWorkflowsByUserId(userId: number): Promise<Workflow[]> {
   const [rows] = await pool.execute('SELECT * FROM workflows WHERE user_id = ? ORDER BY updated_at DESC', [userId]);
   return rows as Workflow[];
+}
+
+export interface ListWorkflowsOptions {
+  page: number;
+  limit: number;
+  isActive?: boolean;
+  search?: string;
+}
+
+export async function getWorkflowsByUserIdPaginated(
+  userId: number,
+  options: ListWorkflowsOptions
+): Promise<{ rows: WorkflowListRow[]; total: number }> {
+  const where: string[] = ['w.user_id = ?'];
+  const params: any[] = [userId];
+
+  if (options.isActive !== undefined) {
+    where.push('w.is_active = ?');
+    params.push(options.isActive ? 1 : 0);
+  }
+  if (options.search) {
+    where.push('w.name LIKE ?');
+    params.push(`%${options.search}%`);
+  }
+
+  const whereClause = where.join(' AND ');
+  const offset = (options.page - 1) * options.limit;
+
+  const [countRows] = await pool.execute(
+    `SELECT COUNT(*) AS total FROM workflows w WHERE ${whereClause}`,
+    params
+  );
+  const total = Number((countRows as any[])[0]?.total ?? 0);
+
+  const [rows] = await pool.execute(
+    `SELECT w.*,
+            (SELECT COUNT(*) FROM workflow_executions e WHERE e.workflow_id = w.id) AS execution_count,
+            (SELECT e.status FROM workflow_executions e WHERE e.workflow_id = w.id ORDER BY e.id DESC LIMIT 1) AS last_execution_status,
+            (SELECT e.created_at FROM workflow_executions e WHERE e.workflow_id = w.id ORDER BY e.id DESC LIMIT 1) AS last_executed_at
+     FROM workflows w
+     WHERE ${whereClause}
+     ORDER BY w.updated_at DESC, w.id DESC
+     LIMIT ? OFFSET ?`,
+    [...params, options.limit, offset]
+  );
+
+  return { rows: rows as WorkflowListRow[], total };
 }
 
 export async function updateWorkflow(id: number, input: UpdateWorkflowInput): Promise<Workflow | null> {
