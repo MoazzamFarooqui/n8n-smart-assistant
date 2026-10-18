@@ -194,7 +194,18 @@ export async function createWorkflow(input: CreateWorkflowInput): Promise<N8nWor
 }
 
 export async function deleteWorkflow(id: string): Promise<N8nWorkflow> {
-  return request({ method: 'DELETE', url: `/workflows/${encodeURIComponent(id)}` });
+  // n8n unpublishes asynchronously: a delete right after deactivation can fail
+  // with 409 "Workflow is still being unpublished" — retry briefly.
+  const attempts = 5;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await request({ method: 'DELETE', url: `/workflows/${encodeURIComponent(id)}` });
+    } catch (err) {
+      if (!(err instanceof N8nError) || err.n8nStatus !== 409 || i === attempts - 1) throw err;
+      await sleep(900 * (i + 1));
+    }
+  }
+  throw new N8nError('Delete workflow failed', 502);
 }
 
 export async function updateWorkflow(
