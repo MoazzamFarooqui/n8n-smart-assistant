@@ -6,10 +6,12 @@ export interface WorkflowExecution {
   id: number;
   workflow_id: number;
   user_id: number;
+  n8n_execution_id: string | null;
   status: ExecutionStatus;
   input_data: object | null;
   output_data: object | null;
   error_message: string | null;
+  error_analysis: string | null;
   started_at: Date | null;
   completed_at: Date | null;
   created_at: Date;
@@ -50,6 +52,50 @@ export async function getWorkflowExecutionById(id: number): Promise<WorkflowExec
 export async function getWorkflowExecutionsByWorkflowId(workflowId: number): Promise<WorkflowExecution[]> {
   const [rows] = await pool.execute('SELECT * FROM workflow_executions WHERE workflow_id = ? ORDER BY created_at DESC', [workflowId]);
   return rows as WorkflowExecution[];
+}
+
+export async function getWorkflowExecutionsByWorkflowIdPaginated(
+  workflowId: number,
+  options: { page: number; limit: number }
+): Promise<{ rows: WorkflowExecution[]; total: number }> {
+  const [countRows] = await pool.execute(
+    'SELECT COUNT(*) AS total FROM workflow_executions WHERE workflow_id = ?',
+    [workflowId]
+  );
+  const total = Number((countRows as any[])[0]?.total ?? 0);
+  const offset = (options.page - 1) * options.limit;
+
+  const [rows] = await pool.execute(
+    'SELECT * FROM workflow_executions WHERE workflow_id = ? ORDER BY id DESC LIMIT ? OFFSET ?',
+    [workflowId, options.limit, offset]
+  );
+
+  return { rows: rows as WorkflowExecution[], total };
+}
+
+export interface ExecutionStats {
+  total: number;
+  completed: number;
+  failed: number;
+  lastExecutionAt: Date | null;
+}
+
+export async function getExecutionStatsByWorkflowId(workflowId: number): Promise<ExecutionStats> {
+  const [rows] = await pool.execute(
+    `SELECT COUNT(*) AS total,
+            COALESCE(SUM(status = 'completed'), 0) AS completed,
+            COALESCE(SUM(status = 'failed'), 0) AS failed,
+            MAX(created_at) AS last_execution_at
+     FROM workflow_executions WHERE workflow_id = ?`,
+    [workflowId]
+  );
+  const row = (rows as any[])[0] ?? {};
+  return {
+    total: Number(row.total ?? 0),
+    completed: Number(row.completed ?? 0),
+    failed: Number(row.failed ?? 0),
+    lastExecutionAt: row.last_execution_at ?? null,
+  };
 }
 
 export async function getWorkflowExecutionsByUserId(userId: number): Promise<WorkflowExecution[]> {
