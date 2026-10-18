@@ -482,3 +482,105 @@ export async function runPipeline(userId: number, prompt: string): Promise<Pipel
     totalMs: Date.now() - overallStart,
   };
 }
+
+export interface WorkflowRef {
+  id: number;
+  name: string;
+  prompt: string | null;
+  n8n_workflow_id: string | null;
+}
+
+export interface ReexecutionResult {
+  status: 'success' | 'failed';
+  dbExecutionId: number;
+  n8nExecutionId?: string;
+  webhookUrl: string;
+  data?: unknown;
+  error?: string;
+  errorAnalysis?: string;
+  ms: number;
+}
+
+export async function rerunWorkflow(
+  userId: number,
+  workflow: WorkflowRef,
+  payload: unknown = {}
+): Promise<ReexecutionResult> {
+  if (!workflow.n8n_workflow_id) {
+    throw new N8nError('Workflow has not been deployed to n8n yet', 409);
+  }
+
+  const started = Date.now();
+  const n8nId = workflow.n8n_workflow_id;
+  const n8nWorkflow = await n8n.getWorkflow(n8nId);
+
+  if (!n8n.isWorkflowActive(n8nWorkflow)) {
+    await n8n.activateWorkflow(n8nId);
+    await pool.query(`UPDATE workflows SET is_active = 1 WHERE id = ?`, [workflow.id]);
+  }
+
+  const webhookNode = n8n.findWebhookNode(n8nWorkflow);
+  const webhookPath = webhookNode?.parameters?.path;
+  const webhookUrl =
+    typeof webhookPath === 'string' && webhookPath
+      ? `${config.n8n.publicUrl}/webhook/${webhookPath.replace(/^\/+/, '')}`
+      : '';
+
+  try {
+    const run = await n8n.executeViaWebhook(n8nWorkflow, { payload });
+    const latest = await findLatestExecution(n8nId, 3);
+
+    const [insert] = await pool.query<ResultSetHeader>(
+      `INSERT INTO workflow_executions
+         (workflow_id, user_id, n8n_execution_id, status, input_data, output_data, started_at, completed_at)
+       VALUES (?, ?, ?, 'completed', ?, ?, NOW(), NOW())`,
+      [workflow.id, userId, latest?.id ?? null, JSON.stringify(payload ?? {}), JSON.stringify(run.data ?? null)]
+    );
+
+    return {
+      status: 'success',
+      dbExecutionId: insert.insertId,
+      n8nExecutionId: latest?.id,
+      webhookUrl: run.webhookUrl,
+      data: run.data,
+      ms: Date.now() - started,
+    };
+  } catch (err) {
+    let errorText = msg(err);
+    const latest = await findLatestExecution(n8nId, 5);
+    if (latest?.id) {
+      try {
+        const full = await n8n.getExecution(latest.id, true);
+        errorText = buildErrorText(full, errorText, workflow.name);
+      } catch {
+        errorText = buildErrorText(latest, errorText, workflow.name);
+      }
+    }
+
+    const errorAnalysis = await analyzeError(workflow.name, workflow.prompt ?? '', errorText);
+
+    const [insert] = await pool.query<ResultSetHeader>(
+      `INSERT INTO workflow_executions
+         (workflow_id, user_id, n8n_execution_id, status, input_data, output_data, error_message, error_analysis, started_at, completed_at)
+       VALUES (?, ?, ?, 'failed', ?, NULL, ?, ?, NOW(), NOW())`,
+      [
+        workflow.id,
+        userId,
+        latest?.id ?? null,
+        JSON.stringify(payload ?? {}),
+        errorText.slice(0, 60000),
+        errorAnalysis ?? null,
+      ]
+    );
+
+    return {
+      status: 'failed',
+      dbExecutionId: insert.insertId,
+      n8nExecutionId: latest?.id,
+      webhookUrl,
+      error: errorText,
+      errorAnalysis,
+      ms: Date.now() - started,
+    };
+  }
+}
