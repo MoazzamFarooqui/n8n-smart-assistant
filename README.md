@@ -3,7 +3,8 @@
 Express + TypeScript + MySQL + JWT Auth + Google Gemini AI + n8n REST API
 
 A backend that uses AI to explain, generate, validate, and fix n8n automation
-workflows — and can deploy and run them in a real n8n instance.
+workflows — and can deploy and run them in a real n8n instance. One prompt can
+generate, audit, deploy, execute, and (if it fails) explain a workflow end-to-end.
 
 ## Quick Start
 
@@ -15,7 +16,7 @@ npm install
 cp .env.example .env
 # Edit .env with your MySQL credentials, GEMINI_API_KEY and N8N settings
 
-# 3. Run migration (creates 5 tables)
+# 3. Run migrations (5 tables + Phase 4 columns)
 npm run db:migrate
 
 # 4. Start server
@@ -96,6 +97,37 @@ npm run verify:phase3  # terminal 3 → 14/14 passed
 How to verify every Phase 3 feature step by step (with commands, expected
 results, and n8n browser proofs): **[docs/PHASE3-VERIFICATION.md](docs/PHASE3-VERIFICATION.md)**
 
+## Phase 4 - Automated Workflow Pipeline
+
+One prompt → fully working workflow, in a single API call (requires a JWT token):
+
+| Method & Path | Feature |
+|---------------|---------|
+| `POST /api/workflows/generate-and-deploy` | The whole pipeline: generate → validate → security audit → deploy to n8n → activate → execute → save to DB |
+
+Pipeline stages:
+
+1. **generate** — Gemini creates the workflow JSON (a Webhook entry point is guaranteed)
+2. **validate** — AI validator checks structure (advisory, does not block)
+3. **audit** — AI security audit (advisory, does not block)
+4. **deploy** — workflow created in n8n + row saved in `workflows` (`n8n_workflow_id`, `prompt`)
+5. **execute** — activated and triggered via its webhook
+
+On execution success it returns the workflow's output. On failure it automatically
+runs the **Error Message Translator** on the real n8n error and returns a plain-English
+`errorAnalysis` — so a user who is missing credentials still gets a helpful explanation.
+Workflows are also sanitized (Set-node formats normalized, unique webhook paths, stable
+response mode) so AI-generated JSON actually runs.
+
+```bash
+npm run dev            # terminal 1 (our server)
+n8n                    # terminal 2 (n8n instance)
+npm run verify:phase4  # terminal 3 → 12/12 passed (runs 2 real pipelines, ~2-4 min)
+```
+
+How to verify every Phase 4 feature step by step (success path, error path, DB proof,
+n8n browser proofs): **[docs/PHASE4-VERIFICATION.md](docs/PHASE4-VERIFICATION.md)**
+
 ## Verification
 
 | Command | What it checks | Expected |
@@ -103,16 +135,17 @@ results, and n8n browser proofs): **[docs/PHASE3-VERIFICATION.md](docs/PHASE3-VE
 | `npm run test:smoke` | All endpoints respond | 11/11 passed |
 | `npm run verify:phase2` | All 8 AI skills + auth + validation | 15/15 passed |
 | `npm run verify:phase3` | Full n8n lifecycle (create → update → activate → execute → results → delete) | 14/14 passed |
+| `npm run verify:phase4` | Full pipeline against live Gemini + n8n (success path + failure analysis) | 12/12 passed |
 
-Step-by-step manual verification for Phase 3: **[docs/PHASE3-VERIFICATION.md](docs/PHASE3-VERIFICATION.md)** (start services → check each feature one by one → n8n browser proofs → troubleshooting)
+Step-by-step manual verification: **[docs/PHASE4-VERIFICATION.md](docs/PHASE4-VERIFICATION.md)** (Phase 4) · **[docs/PHASE3-VERIFICATION.md](docs/PHASE3-VERIFICATION.md)** (Phase 3)
 
 ## Database Tables
 
 - `users` - authentication
-- `workflows` - saved workflows
+- `workflows` - saved workflows (+ `n8n_workflow_id`, `prompt` from Phase 4)
 - `chat_sessions` - chat history
 - `chat_messages` - messages
-- `workflow_executions` - execution logs
+- `workflow_executions` - execution logs (+ `n8n_execution_id`, `error_analysis` from Phase 4)
 
 ## Scripts
 
@@ -120,10 +153,11 @@ Step-by-step manual verification for Phase 3: **[docs/PHASE3-VERIFICATION.md](do
 npm run dev           # Dev with hot reload
 npm run build         # Compile to dist/
 npm start             # Run production build
-npm run db:migrate    # Run SQL migration
+npm run db:migrate    # Run all SQL migrations (idempotent)
 npm run test:smoke    # Quick check of all endpoints
 npm run verify:phase2 # Full Phase 2 verification (15 checks)
 npm run verify:phase3 # Full Phase 3 verification against n8n (14 checks)
+npm run verify:phase4 # Full Phase 4 pipeline verification (12 checks)
 ```
 
 ## Troubleshooting
@@ -135,3 +169,6 @@ npm run verify:phase3 # Full Phase 3 verification against n8n (14 checks)
 | Register 500 | Migration not run → `npm run db:migrate` |
 | n8n endpoints return 502/503 | Start n8n (`n8n`), check `N8N_API_KEY` in `.env`, restart server |
 | Execute returns 409 | Workflow is not active → activate it first |
+| Pipeline 502 at "generate" + 429 | Gemini rate limit (free tier) — wait and retry; fallback models are automatic |
+| `Unknown column 'n8n_workflow_id'` | New migrations not applied → `npm run db:migrate` |
+| Pipeline `status: "failed"` + credential error | Not a bug — read `errorAnalysis` or add credentials in n8n |
