@@ -407,8 +407,9 @@ export async function runPipeline(userId: number, prompt: string): Promise<Pipel
   let errorAnalysis: string | undefined;
   try {
     await n8n.activateWorkflow(created.id);
-    const run = await n8n.executeViaWebhook(created, { payload: {} });
+    // activation succeeded → the workflow is published in n8n; keep the flag honest
     await pool.query(`UPDATE workflows SET is_active = 1 WHERE id = ?`, [workflowId]);
+    const run = await n8n.executeViaWebhook(created, { payload: {} });
 
     const latest = await findLatestExecution(created.id, 3);
     await pool.query(
@@ -487,6 +488,7 @@ export interface WorkflowRef {
   id: number;
   name: string;
   prompt: string | null;
+  is_active?: boolean | number;
   n8n_workflow_id: string | null;
 }
 
@@ -516,6 +518,9 @@ export async function rerunWorkflow(
 
   if (!n8n.isWorkflowActive(n8nWorkflow)) {
     await n8n.activateWorkflow(n8nId);
+    await pool.query(`UPDATE workflows SET is_active = 1 WHERE id = ?`, [workflow.id]);
+  } else if (!workflow.is_active) {
+    // the workflow is published in n8n but our flag drifted — sync it
     await pool.query(`UPDATE workflows SET is_active = 1 WHERE id = ?`, [workflow.id]);
   }
 
