@@ -1,0 +1,252 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; margin: 0; padding: 0; background: #0F0F0F; }
+body { -webkit-font-smoothing: antialiased; }
+
+        * { box-sizing: border-box; }
+        .app {
+          --bg: #0F0F0F;
+          --card: #1B1B1B;
+          --card2: #212121;
+          --accent: #FF7A00;
+          --accent2: #FFB347;
+          --accent3: #FF9F1C;
+          --text: #FFFFFF;
+          --muted: #A0A0A0;
+          --border: #2C2C2C;
+          background: var(--bg);
+          color: var(--text);
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+          max-width: 480px;
+          margin: 0 auto;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          position: relative;
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 0 0 1px var(--border);
+        }
+        .screen { flex: 1; overflow-y: auto; padding-bottom: 92px; animation: screenIn .38s cubic-bezier(.22,.9,.32,1); }
+        @keyframes screenIn { from { opacity: 0; transform: translateY(14px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes popIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+        @keyframes floatY { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+        @keyframes glowPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,109,58,0.35); } 50% { box-shadow: 0 0 0 6px rgba(255,109,58,0); } }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+        @keyframes dashFlow { to { stroke-dashoffset: -24; } }
+        @keyframes growLine { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+        @keyframes chipGlow { 0%,100% { border-color: var(--border); } 50% { border-color: var(--accent); } }
+        @keyframes arrowNudge { 0%,100% { transform: translateX(0); opacity: .7; } 50% { transform: translateX(3px); opacity: 1; } }
+        @keyframes navBounce { 0% { transform: scale(1); } 40% { transform: scale(1.28); } 65% { transform: scale(.92); } 100% { transform: scale(1); } }
+        @keyframes spinSlow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .fadeUp { opacity: 0; animation: fadeUp .5s cubic-bezier(.22,.9,.32,1) forwards; }
+        .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+        .hero { padding: 26px 20px 18px; background: linear-gradient(120deg, #1c1c1f 0%, var(--bg) 45%, #1a1a1c 100%); background-size: 200% 200%; animation: heroShift 9s ease-in-out infinite; border-bottom: 1px solid var(--border); }
+        @keyframes heroShift { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+        .heroTop { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+        .heroEyebrow { color: var(--accent); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 6px; animation: fadeUp .5s ease forwards; }
+        .heroTitle { font-size: 28px; line-height: 1.15; font-weight: 800; margin: 0; letter-spacing: -0.02em; animation: fadeUp .55s cubic-bezier(.22,.9,.32,1) .05s forwards; opacity: 0; }
+        .heroMark { font-family: ui-monospace, monospace; font-weight: 800; font-size: 13px; color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; padding: 6px 9px; height: fit-content; animation: floatY 3s ease-in-out infinite, glowPulse 2.6s ease-in-out infinite; }
+        .heroDesc { font-size: 13px; line-height: 1.55; color: var(--muted); margin: 10px 0 0; max-width: 320px; animation: fadeUp .55s ease .08s both; }
+        .heroBtnRow { display: flex; gap: 10px; margin: 16px 0; }
+        .primaryBtn, .glassBtn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 700; border-radius: 12px; padding: 12px; cursor: pointer; transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease; border: none; }
+        .primaryBtn { background: linear-gradient(135deg, var(--accent), var(--accent3)); color: #0F0F0F; box-shadow: 0 8px 20px -8px rgba(255,122,0,0.55); }
+        .primaryBtn:active { transform: scale(.96); }
+        .primaryBtn:hover { box-shadow: 0 10px 26px -8px rgba(255,122,0,0.7); }
+        .glassBtn { background: rgba(255,255,255,0.06); color: var(--text); border: 1px solid rgba(255,255,255,0.12); backdrop-filter: blur(10px); }
+        .glassBtn:active { transform: scale(.96); }
+        .glassBtn:hover { border-color: var(--accent); color: var(--accent2); }
+        .statRowScroll { overflow-x: auto; scrollbar-width: none; }
+        .statRowScroll::-webkit-scrollbar { display: none; }
+        .statRowScroll .statCard { min-width: 84px; flex: 0 0 auto; }
+        .statCardAccent { cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--accent); border-color: rgba(255,122,0,0.4) !important; background: linear-gradient(160deg, rgba(255,122,0,0.12), rgba(255,122,0,0.02)); }
+        .statCardAccent svg { animation: floatY 2.4s ease-in-out infinite; }
+
+        .searchWrap { display: flex; align-items: center; gap: 10px; background: var(--card2); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; transition: border-color .2s ease, box-shadow .2s ease, transform .15s ease; animation: fadeUp .5s cubic-bezier(.22,.9,.32,1) .1s forwards; opacity: 0; }
+        .searchWrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,109,58,0.15); }
+        .searchWrapInline { margin-bottom: 6px; }
+        .searchIcon { color: var(--muted); flex-shrink: 0; transition: color .2s ease; }
+        .searchWrap:focus-within .searchIcon { color: var(--accent); }
+        .searchInput { background: transparent; border: none; outline: none; color: var(--text); font-size: 15px; width: 100%; }
+        .searchInput::placeholder { color: var(--muted); }
+
+        .listPad { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+        .statRow { display: flex; gap: 10px; padding: 0 16px 4px; }
+        .statCard { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px 10px; text-align: center; transition: transform .2s ease, border-color .2s ease; }
+        .statCard:active { transform: scale(.96); }
+        .statNum { font-size: 22px; font-weight: 800; color: var(--accent); margin: 0 0 2px; font-family: ui-monospace, monospace; display: inline-block; animation: popIn .4s cubic-bezier(.34,1.56,.64,1) both; }
+
+        .section { padding: 18px 16px 4px; }
+        .sectionHead { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; color: var(--accent); }
+        .sectionHead h2 { font-size: 14px; font-weight: 700; margin: 0; color: var(--text); letter-spacing: -0.01em; }
+
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; transition: transform .18s cubic-bezier(.22,.9,.32,1), border-color .18s ease, box-shadow .18s ease; }
+        .cardTappable { cursor: pointer; }
+        .cardTappable:active { transform: scale(0.97); border-color: var(--accent); }
+        @media (hover: hover) {
+          .cardTappable:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 8px 22px -10px rgba(255,109,58,0.35); }
+          .miniCard:hover, .quickCard:hover, .integTile:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 8px 18px -10px rgba(255,109,58,0.3); }
+        }
+        .cardTitle { font-size: 15px; font-weight: 700; margin: 0 0 2px; }
+        .rowBetween { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .rowIcon { display: flex; align-items: center; gap: 12px; }
+        .muted { color: var(--muted); }
+        .small { font-size: 13px; line-height: 1.5; margin: 0; }
+
+        .iconChip { width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform .2s ease; }
+        .iconChip.large { width: 58px; height: 58px; border-radius: 16px; animation: popIn .45s cubic-bezier(.34,1.56,.64,1) both; }
+        .cardTappable:hover .iconChip, .miniCard:hover .iconChip, .integTile:hover .iconChip { transform: scale(1.08) rotate(-4deg); }
+
+        .hScroll { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+        .hScroll::-webkit-scrollbar { display: none; }
+        .miniCard { min-width: 92px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: transform .18s cubic-bezier(.22,.9,.32,1), border-color .18s ease, box-shadow .18s ease; }
+        .miniCard:active { transform: scale(.95); border-color: var(--accent); }
+        .miniCardTitle { font-size: 12px; font-weight: 600; margin: 0; }
+
+        .flowPreview { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+        .flowChip { font-size: 11px; background: var(--card2); border: 1px solid var(--border); border-radius: 8px; padding: 4px 8px; font-family: ui-monospace, monospace; animation: chipGlow 3.2s ease-in-out infinite; }
+        .flowArrow { color: var(--accent); animation: arrowNudge 1.1s ease-in-out infinite; }
+
+        .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .quickCard { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; gap: 6px; transition: transform .18s cubic-bezier(.22,.9,.32,1), border-color .18s ease; }
+        .quickCard:active { transform: scale(.96); border-color: var(--accent); }
+        .quickCardTitle { font-size: 12.5px; font-weight: 600; margin: 0; }
+        .integTile { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: transform .18s cubic-bezier(.22,.9,.32,1), border-color .18s ease, box-shadow .18s ease; }
+        .integTile:active { transform: scale(.96); border-color: var(--accent); }
+        .exploreTile { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 16px 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: transform .18s cubic-bezier(.22,.9,.32,1), border-color .18s ease, box-shadow .18s ease; }
+        .exploreTile:active { transform: scale(.96); border-color: var(--accent); }
+        @media (hover: hover) {
+          .exploreTile:hover { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 10px 22px -12px rgba(255,109,58,0.4); }
+          .exploreTile:hover .iconChip { transform: scale(1.1) rotate(-4deg); }
+        }
+
+        .ghostBtn { margin-top: 12px; width: 100%; background: transparent; border: 1px dashed var(--border); color: var(--accent); font-weight: 700; font-size: 13px; border-radius: 12px; padding: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; transition: transform .15s ease, border-color .2s ease, background .2s ease; }
+        .ghostBtn:active { transform: scale(.97); }
+        .ghostBtn:hover { border-color: var(--accent); background: rgba(255,109,58,0.06); }
+        .ghostBtn svg { transition: transform .2s ease; }
+        .ghostBtn:hover svg { transform: translateX(3px); }
+
+        .topbar { display: flex; align-items: center; justify-content: space-between; padding: 16px 14px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: rgba(18,18,18,0.92); backdrop-filter: blur(6px); z-index: 5; animation: fadeUp .3s ease both; }
+        .topbar h1 { font-size: 16px; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
+        .iconBtn { background: var(--card); border: 1px solid var(--border); color: var(--text); width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform .15s ease, border-color .15s ease, background .15s ease; }
+        .iconBtn:active { transform: scale(.88) translateX(-2px); border-color: var(--accent); }
+        .iconBtn:hover { border-color: var(--accent); color: var(--accent); }
+        .brandDot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: glowPulse 2s ease-in-out infinite; }
+
+        .detailHero { border-radius: 16px; padding: 20px; display: flex; align-items: center; gap: 12px; margin-bottom: 4px; animation: fadeUp .4s cubic-bezier(.22,.9,.32,1) both; }
+
+        .subCard { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+        .subCardTitle { font-size: 13px; font-weight: 700; color: var(--accent); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+        .chipWrap { display: flex; flex-wrap: wrap; gap: 6px; }
+        .tagChip { background: var(--card2); border: 1px solid var(--border); border-radius: 999px; padding: 5px 11px; font-size: 12px; transition: border-color .2s ease, transform .15s ease; }
+        .tagChip:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+        .opRow { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+        .opRow:first-of-type { border-top: none; padding-top: 0; }
+        .opDot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; }
+        .opName { font-size: 13.5px; font-weight: 700; margin: 0 0 2px; }
+
+        .ioRow { display: flex; gap: 10px; }
+        .ioCard { flex: 1; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 14px; }
+
+        .warnCard { background: #FF7A000f; border: 1px solid #FF7A0033; border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+        .warnRow { display: flex; align-items: flex-start; gap: 8px; }
+        .warnRow svg { animation: navBounce 2.4s ease-in-out infinite; }
+
+        .tipCard { background: var(--card2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 12px; padding: 12px 14px; display: flex; align-items: flex-start; gap: 10px; color: var(--accent2); position: relative; overflow: hidden; }
+        .tipCard svg { flex-shrink: 0; margin-top: 1px; animation: floatY 2.4s ease-in-out infinite; }
+        .tipCard p { color: var(--text); }
+
+        .codeBlock { background: #0D0D0E; border: 1px solid var(--border); border-radius: 12px; padding: 14px; overflow-x: auto; animation: fadeUp .4s ease both; }
+        .codeBlock pre { margin: 0; font-family: ui-monospace, monospace; font-size: 12.5px; color: #9FE6B8; }
+
+        .diagram { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px 14px; display: flex; flex-direction: column; align-items: center; }
+        .diagramRow { display: flex; flex-direction: column; align-items: center; animation: popIn .4s cubic-bezier(.34,1.56,.64,1) both; }
+        .diagramNode { display: flex; align-items: center; gap: 10px; background: var(--card2); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 16px; transition: transform .2s ease, box-shadow .2s ease; }
+        .diagramNode:hover { transform: scale(1.04); box-shadow: 0 6px 16px -8px rgba(255,109,58,0.5); }
+        .diagramIndex { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: #121212; font-size: 11px; font-weight: 800; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, monospace; animation: glowPulse 2.2s ease-in-out infinite; }
+        .diagramLine { width: 2px; height: 22px; background: linear-gradient(var(--accent), var(--border)); transform-origin: top; animation: growLine .5s cubic-bezier(.22,.9,.32,1) both; }
+
+        .stepList { display: flex; flex-direction: column; }
+        .stepRow { display: flex; gap: 12px; position: relative; padding-bottom: 18px; animation: fadeUp .45s cubic-bezier(.22,.9,.32,1) both; }
+        .stepRow:last-child { padding-bottom: 0; }
+        .stepMarkerWrap { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+        .stepMarker { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #121212; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; font-family: ui-monospace, monospace; flex-shrink: 0; animation: glowPulse 2.4s ease-in-out infinite; }
+        .stepConnector { width: 2px; flex: 1; background: linear-gradient(var(--accent), var(--border)); margin-top: 4px; transform-origin: top; animation: growLine .45s cubic-bezier(.22,.9,.32,1) both; }
+        .stepBody { flex: 1; padding-top: 3px; }
+        .stepTitle { font-size: 14px; font-weight: 700; margin: 0 0 3px; }
+        .stepDesc { font-size: 12.5px; line-height: 1.55; color: var(--muted); margin: 0; }
+
+        .lessonTitle { font-size: 20px; font-weight: 800; margin: 6px 0 8px; animation: fadeUp .4s ease both; }
+        .lessonBody { font-size: 14.5px; line-height: 1.65; animation: fadeUp .45s ease .05s both; opacity: 0; }
+
+        .emptyState { text-align: center; padding: 40px 20px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 10px; animation: fadeUp .4s ease both; }
+        .emptyState svg { animation: floatY 2.2s ease-in-out infinite; }
+
+        .footerNote { text-align: center; padding: 20px 10px 6px; }
+
+        .bottomNav { position: sticky; bottom: 0; display: flex; background: #17171A; border-top: 1px solid var(--border); padding: 8px 4px calc(8px + env(safe-area-inset-bottom)); }
+        .navItem { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; border-radius: 10px; cursor: pointer; color: var(--muted); background: transparent; border: none; transition: color .2s ease, transform .15s ease; }
+        .navItem:active { transform: scale(.9); }
+        .navItem.active { color: var(--accent); }
+        .navItem.active svg { animation: navBounce .45s cubic-bezier(.34,1.56,.64,1); }
+        .navItem span { font-size: 10px; font-weight: 600; }
+
+        /* Stagger entrance for list-style containers so screens feel choreographed, not static */
+        .listPad > *, .grid2 > *, .hScroll > *, .chipWrap > *, .diagram > *, .subCard > .opRow, .warnCard > .warnRow, .stepList > * {
+          animation: fadeUp .45s cubic-bezier(.22,.9,.32,1) both;
+        }
+        .listPad > *:nth-child(1), .grid2 > *:nth-child(1), .hScroll > *:nth-child(1), .chipWrap > *:nth-child(1), .diagram > *:nth-child(1), .subCard > .opRow:nth-child(1), .warnCard > .warnRow:nth-child(1), .stepList > *:nth-child(1) { animation-delay: 0ms; }
+        .listPad > *:nth-child(2), .grid2 > *:nth-child(2), .hScroll > *:nth-child(2), .chipWrap > *:nth-child(2), .diagram > *:nth-child(2), .subCard > .opRow:nth-child(2), .warnCard > .warnRow:nth-child(2), .stepList > *:nth-child(2) { animation-delay: 35ms; }
+        .listPad > *:nth-child(3), .grid2 > *:nth-child(3), .hScroll > *:nth-child(3), .chipWrap > *:nth-child(3), .diagram > *:nth-child(3), .subCard > .opRow:nth-child(3), .warnCard > .warnRow:nth-child(3), .stepList > *:nth-child(3) { animation-delay: 70ms; }
+        .listPad > *:nth-child(4), .grid2 > *:nth-child(4), .hScroll > *:nth-child(4), .chipWrap > *:nth-child(4), .diagram > *:nth-child(4), .subCard > .opRow:nth-child(4), .warnCard > .warnRow:nth-child(4), .stepList > *:nth-child(4) { animation-delay: 105ms; }
+        .listPad > *:nth-child(5), .grid2 > *:nth-child(5), .hScroll > *:nth-child(5), .chipWrap > *:nth-child(5), .diagram > *:nth-child(5), .subCard > .opRow:nth-child(5), .warnCard > .warnRow:nth-child(5), .stepList > *:nth-child(5) { animation-delay: 140ms; }
+        .listPad > *:nth-child(6), .grid2 > *:nth-child(6), .hScroll > *:nth-child(6), .chipWrap > *:nth-child(6), .diagram > *:nth-child(6), .subCard > .opRow:nth-child(6), .warnCard > .warnRow:nth-child(6), .stepList > *:nth-child(6) { animation-delay: 175ms; }
+        .listPad > *:nth-child(7), .grid2 > *:nth-child(7), .hScroll > *:nth-child(7), .chipWrap > *:nth-child(7), .diagram > *:nth-child(7), .subCard > .opRow:nth-child(7), .warnCard > .warnRow:nth-child(7), .stepList > *:nth-child(7) { animation-delay: 210ms; }
+        .listPad > *:nth-child(8), .grid2 > *:nth-child(8), .hScroll > *:nth-child(8), .chipWrap > *:nth-child(8), .diagram > *:nth-child(8), .subCard > .opRow:nth-child(8), .warnCard > .warnRow:nth-child(8), .stepList > *:nth-child(8) { animation-delay: 245ms; }
+        .listPad > *:nth-child(9), .grid2 > *:nth-child(9), .hScroll > *:nth-child(9), .chipWrap > *:nth-child(9), .diagram > *:nth-child(9), .subCard > .opRow:nth-child(9), .warnCard > .warnRow:nth-child(9), .stepList > *:nth-child(9) { animation-delay: 280ms; }
+        .listPad > *:nth-child(10), .grid2 > *:nth-child(10), .hScroll > *:nth-child(10), .chipWrap > *:nth-child(10), .diagram > *:nth-child(10), .subCard > .opRow:nth-child(10), .warnCard > .warnRow:nth-child(10), .stepList > *:nth-child(10) { animation-delay: 315ms; }
+        .listPad > *:nth-child(11), .grid2 > *:nth-child(11), .hScroll > *:nth-child(11), .chipWrap > *:nth-child(11), .diagram > *:nth-child(11), .subCard > .opRow:nth-child(11), .warnCard > .warnRow:nth-child(11), .stepList > *:nth-child(11) { animation-delay: 350ms; }
+        .listPad > *:nth-child(12), .grid2 > *:nth-child(12), .hScroll > *:nth-child(12), .chipWrap > *:nth-child(12), .diagram > *:nth-child(12), .subCard > .opRow:nth-child(12), .warnCard > .warnRow:nth-child(12), .stepList > *:nth-child(12) { animation-delay: 385ms; }
+
+        @media (min-width: 481px) {
+          .app { margin-top: 20px; margin-bottom: 20px; min-height: calc(100vh - 40px); }
+        }
+
+        /* AI Assistant */
+        .aiFab { position: absolute; right: 16px; bottom: 92px; width: 54px; height: 54px; border-radius: 50%; border: none; background: linear-gradient(135deg, var(--accent), var(--accent3)); color: #0F0F0F; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 10px 24px -8px rgba(255,122,0,0.6); z-index: 20; animation: floatY 2.6s ease-in-out infinite, glowPulse 2.4s ease-in-out infinite; }
+        .aiFab:active { transform: scale(.92); }
+
+        .chatOverlay { position: absolute; inset: 0; z-index: 30; pointer-events: none; opacity: 0; transition: opacity .25s ease; display: flex; align-items: flex-end; background: rgba(0,0,0,0.45); backdrop-filter: blur(2px); }
+        .chatOverlay.chatOpen { pointer-events: auto; opacity: 1; }
+        .chatPanel { width: 100%; max-height: 88%; background: rgba(27,27,27,0.85); backdrop-filter: blur(18px); border-top: 1px solid var(--border); border-radius: 22px 22px 0 0; display: flex; flex-direction: column; transform: translateY(100%); transition: transform .32s cubic-bezier(.22,.9,.32,1); box-shadow: 0 -12px 40px -12px rgba(0,0,0,0.6); }
+        .chatOverlay.chatOpen .chatPanel { transform: translateY(0); }
+        .chatHeader { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+        .chatBody { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-height: 220px; }
+        .bubbleRow { display: flex; }
+        .bubbleRowUser { justify-content: flex-end; }
+        .bubble { max-width: 82%; padding: 10px 14px; border-radius: 16px; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; animation: popIn .28s cubic-bezier(.22,.9,.32,1) both; }
+        .bubbleAI { background: var(--card2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+        .bubbleUser { background: linear-gradient(135deg, var(--accent), var(--accent3)); color: #0F0F0F; font-weight: 500; border-bottom-right-radius: 4px; }
+        .typingBubble { display: flex; gap: 4px; align-items: center; padding: 14px; }
+        .typingBubble span { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: typingDot 1.1s ease-in-out infinite; }
+        .typingBubble span:nth-child(2) { animation-delay: .15s; }
+        .typingBubble span:nth-child(3) { animation-delay: .3s; }
+        @keyframes typingDot { 0%,60%,100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-4px); opacity: 1; } }
+        .quickPromptWrap { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+        .quickPromptChip { background: var(--card2); border: 1px solid var(--border); color: var(--text); font-size: 12px; border-radius: 999px; padding: 8px 13px; cursor: pointer; transition: border-color .2s ease, transform .15s ease; animation: fadeUp .4s ease both; }
+        .quickPromptChip:hover { border-color: var(--accent); color: var(--accent2); }
+        .quickPromptChip:active { transform: scale(.95); }
+        .chatInputRow { display: flex; gap: 8px; padding: 12px 14px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); }
+        .chatInput { flex: 1; background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; color: var(--text); font-size: 13.5px; outline: none; transition: border-color .2s ease; }
+        .chatInput:focus { border-color: var(--accent); }
+        .chatSendBtn { width: 42px; height: 42px; border-radius: 12px; border: none; background: linear-gradient(135deg, var(--accent), var(--accent3)); color: #0F0F0F; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: transform .15s ease, opacity .2s ease; }
+        .chatSendBtn:disabled { opacity: .4; cursor: default; }
+        .chatSendBtn:active:not(:disabled) { transform: scale(.9); }
+        .spinIcon { animation: spinSlow .9s linear infinite; }
