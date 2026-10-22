@@ -167,15 +167,54 @@ export const authApi = {
   me: () => request("/auth/me", { handle401: false, timeoutMs: 15000 }),
 };
 
+
 export const aiApi = {
-  chat: ({ message, history }) => aiText("/ai/chat", { message, history }),
-  explainNode: ({ nodeType, nodeName }) => aiText("/ai/explain-node", { nodeType, nodeName }),
-  explainWorkflow: (workflowJson) => aiText("/ai/explain-workflow", { workflowJson }),
-  validateWorkflow: (workflowJson) => aiText("/ai/validate-workflow", { workflowJson }),
-  translateError: ({ error, context }) => aiText("/ai/translate-error", context ? { error, context } : { error }),
-  compatibility: ({ sourceNode, targetNode }) => aiText("/ai/compatibility", { sourceNode, targetNode }),
-  securityAudit: (workflowJson) => aiText("/ai/security-audit", { workflowJson }),
+  chat: async ({ message, history, sessionId }) => {
+    const data = await request('/ai/chat', {
+      method: 'POST',
+      body: { message, history, ...(sessionId ? { sessionId } : {}) },
+      timeoutMs: AI_TIMEOUT,
+    });
+
+    if (!data || typeof data.response !== 'string' || !data.response.trim()) {
+      throw new ApiError('The AI returned an empty answer. Please try again.');
+    }
+
+    return data;
+  },
+
+  explainNode: ({ nodeType, nodeName }) =>
+    aiText('/ai/explain-node', { nodeType, nodeName }),
+
+  explainWorkflow: (workflowJson) =>
+    aiText('/ai/explain-workflow', { workflowJson }),
+
+  validateWorkflow: (workflowJson) =>
+    aiText('/ai/validate-workflow', { workflowJson }),
+
+  translateError: ({ error, context }) =>
+    aiText('/ai/translate-error', context ? { error, context } : { error }),
+
+  compatibility: ({ sourceNode, targetNode }) =>
+    aiText('/ai/compatibility', { sourceNode, targetNode }),
+
+  securityAudit: (workflowJson) =>
+    aiText('/ai/security-audit', { workflowJson }),
 };
+
+export const chatApi = {
+  list: () => request('/chat'),
+  create: (title) =>
+    request('/chat', {
+      method: 'POST',
+      body: title ? { title } : {},
+    }),
+  messages: (id) =>
+    request('/chat/' + encodeURIComponent(id) + '/messages'),
+  remove: (id) =>
+    request('/chat/' + encodeURIComponent(id), { method: 'DELETE' }),
+};
+
 
 export const workflowApi = {
   generateAndDeploy: (prompt, signal) =>
