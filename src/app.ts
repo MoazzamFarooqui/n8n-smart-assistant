@@ -1,4 +1,5 @@
 import express from 'express';
+import chatRoutes from './routes/chat.js';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -29,6 +30,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api', healthRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/chat', chatRoutes);
 app.use('/api/n8n', n8nRoutes);
 app.use('/api/workflows', workflowRoutes);
 
