@@ -2,7 +2,7 @@ import React from "react";
 import {
   Search, ChevronRight, HelpCircle, Boxes, Plug, Workflow, GraduationCap,
   Compass, TrendingUp, Rocket, Briefcase, Sparkles, Sparkle, Map,
-  MessagesSquare, Zap, Phone,
+  MessagesSquare, Zap, Phone, Wrench,
 } from "lucide-react";
 import { Card, Section } from "../components/ui";
 import { CATEGORY_COLOR, NODES } from "../data/nodes";
@@ -92,6 +92,26 @@ export default function Dashboard({ go, query, setQuery, filteredNodes, filtered
               <p className="muted small">Ask AI</p>
             </div>
           </div>
+
+          <Section title="Smart Assistant" icon={Sparkles}>
+            <div className="grid2">
+              <div className="exploreTile" onClick={() => go("generate")}>
+                <div className="iconChip" style={{ background: "#FF7A0022", color: "#FF7A00" }}><Sparkles size={20} /></div>
+                <p className="cardTitle">Build with AI</p>
+                <p className="muted small">Describe it, we deploy it to n8n</p>
+              </div>
+              <div className="exploreTile" onClick={() => go("myworkflows")}>
+                <div className="iconChip" style={{ background: CATEGORY_COLOR.Trigger + "22", color: CATEGORY_COLOR.Trigger }}><Workflow size={20} /></div>
+                <p className="cardTitle">My Workflows</p>
+                <p className="muted small">Run, pause and manage yours</p>
+              </div>
+              <div className="exploreTile" onClick={() => go("tools")}>
+                <div className="iconChip" style={{ background: CATEGORY_COLOR.AI + "22", color: CATEGORY_COLOR.AI }}><Wrench size={20} /></div>
+                <p className="cardTitle">AI Tools</p>
+                <p className="muted small">Explain, validate, audit, debug</p>
+              </div>
+            </div>
+          </Section>
 
           <Section title="Explore" icon={Compass}>
             <div className="grid2">

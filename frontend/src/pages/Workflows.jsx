@@ -1,9 +1,21 @@
-import React from "react";
-import { ArrowRight, HelpCircle } from "lucide-react";
+import React, { useState } from "react";
+import { ArrowRight, HelpCircle, ShieldCheck, BookOpen } from "lucide-react";
 import { Card, Section } from "../components/ui";
 import { TopBar } from "../components/ui";
 import { WORKFLOWS } from "../data/workflows";
 import { PURPOSE_PAGE } from "../data/content";
+import { AIActionSheet } from "../components/Sheet";
+import { aiApi } from "../services/api";
+
+// Build a simple n8n-style JSON from a learning template so the AI can audit it
+function templateToJson(wf) {
+  const nodes = wf.steps.map((s, i) => ({ name: s.name, type: s.name, position: [250 * i, 300], notes: s.desc }));
+  const connections = {};
+  nodes.slice(0, -1).forEach((n, i) => {
+    connections[n.name] = { main: [[{ node: nodes[i + 1].name, type: "main", index: 0 }]] };
+  });
+  return JSON.stringify({ name: wf.title, nodes, connections }, null, 2);
+}
 
 export function WorkflowsList({ go }) {
   return (
@@ -39,11 +51,23 @@ export function WorkflowsList({ go }) {
 }
 
 export function WorkflowDetail({ wf, goBack }) {
+  const [auditOpen, setAuditOpen] = useState(false);
+  if (!wf) {
+    return (
+      <div className="screen">
+        <TopBar title="Workflow" onBack={goBack} />
+        <div className="emptyState"><BookOpen size={26} /><p>We could not find that workflow.</p></div>
+      </div>
+    );
+  }
   return (
     <div className="screen">
       <TopBar title={wf.title} onBack={goBack} />
       <div className="listPad">
         <p className="muted small">{wf.tagline}</p>
+        <button className="glassBtn" type="button" onClick={() => setAuditOpen(true)} style={{ flex: "none" }}>
+          <ShieldCheck size={16} /> AI security check
+        </button>
         <div className="diagram">
           {wf.steps.map((s, i) => (
             <div key={i} className="diagramRow">
@@ -62,7 +86,13 @@ export function WorkflowDetail({ wf, goBack }) {
           </div>
         ))}
       </div>
+      <AIActionSheet
+        open={auditOpen}
+        onClose={() => setAuditOpen(false)}
+        title={"Security check: " + wf.title}
+        cacheKey={"tpl-" + wf.id}
+        run={() => aiApi.securityAudit(templateToJson(wf))}
+      />
     </div>
   );
 }
-

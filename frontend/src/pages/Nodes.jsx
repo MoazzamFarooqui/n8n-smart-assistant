@@ -1,7 +1,9 @@
-import React from "react";
-import { Search, ChevronRight, ShieldAlert, XCircle, Lightbulb, Key } from "lucide-react";
+import React, { useState } from "react";
+import { Search, ChevronRight, ShieldAlert, XCircle, Lightbulb, Key, Sparkles, BookOpen } from "lucide-react";
 import { TopBar, Card, Pill, DetailBlock, DetailList } from "../components/ui";
 import { CATEGORY_COLOR } from "../data/nodes";
+import { AIActionSheet } from "../components/Sheet";
+import { aiApi } from "../services/api";
 
 export function NodesList({ go, query, setQuery, filteredNodes }) {
   return (
@@ -35,6 +37,15 @@ export function NodesList({ go, query, setQuery, filteredNodes }) {
 }
 
 export function NodeDetail({ node, goBack }) {
+  const [explainOpen, setExplainOpen] = useState(false);
+  if (!node) {
+    return (
+      <div className="screen">
+        <TopBar title="Node" onBack={goBack} />
+        <div className="emptyState"><BookOpen size={26} /><p>We could not find that node.</p></div>
+      </div>
+    );
+  }
   return (
     <div className="screen">
       <TopBar title={node.name} onBack={goBack} />
@@ -45,6 +56,10 @@ export function NodeDetail({ node, goBack }) {
           </div>
           <Pill color={CATEGORY_COLOR[node.category]}>{node.category}</Pill>
         </div>
+
+        <button className="primaryBtn" type="button" onClick={() => setExplainOpen(true)} style={{ flex: "none" }}>
+          <Sparkles size={16} /> Explain this node with AI
+        </button>
 
         <DetailBlock title="Purpose" text={node.purpose} />
         <DetailBlock title="Why do we use this node?" text={node.why} />
@@ -90,7 +105,13 @@ export function NodeDetail({ node, goBack }) {
           <p className="small">{node.tip}</p>
         </div>
       </div>
+      <AIActionSheet
+        open={explainOpen}
+        onClose={() => setExplainOpen(false)}
+        title={"Explain: " + node.name}
+        cacheKey={"node-" + node.id}
+        run={() => aiApi.explainNode({ nodeType: node.name, nodeName: node.name })}
+      />
     </div>
   );
 }
-

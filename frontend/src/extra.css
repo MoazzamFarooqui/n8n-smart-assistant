@@ -1,0 +1,93 @@
+/* Styles for the Smart Assistant features (auth, generator, my workflows, AI tools).
+   Uses the same CSS variables as index.css (.app scope). */
+
+/* ---------- Toasts ---------- */
+.toastHost { position: absolute; top: 12px; left: 12px; right: 12px; z-index: 80; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.toast { pointer-events: auto; display: flex; align-items: flex-start; gap: 10px; background: #1f1f23; border: 1px solid var(--border); border-radius: 12px; padding: 11px 12px; font-size: 13px; line-height: 1.45; box-shadow: 0 10px 30px -12px rgba(0,0,0,.8); animation: fadeUp .3s cubic-bezier(.22,.9,.32,1) both; }
+.toast svg { flex-shrink: 0; margin-top: 2px; }
+.toast-success { border-color: #33D6A655; } .toast-success svg { color: #33D6A6; }
+.toast-error { border-color: #FF5C5C66; } .toast-error svg { color: #FF6B6B; }
+.toast-info svg { color: var(--accent); }
+.toastMsg { flex: 1; word-break: break-word; }
+.toastClose { background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 2px; }
+
+/* ---------- Bottom sheet ---------- */
+.sheetOverlay { position: absolute; inset: 0; z-index: 60; background: rgba(0,0,0,.55); backdrop-filter: blur(2px); display: flex; align-items: flex-end; animation: sheetFade .2s ease both; }
+@keyframes sheetFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheetUp { from { transform: translateY(40px); opacity: .6; } to { transform: translateY(0); opacity: 1; } }
+.sheet { width: 100%; max-height: 88%; background: var(--card); border-top: 1px solid var(--border); border-radius: 22px 22px 0 0; display: flex; flex-direction: column; animation: sheetUp .28s cubic-bezier(.22,.9,.32,1) both; }
+.sheetHeader { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.sheetBody { padding: 14px 16px calc(22px + env(safe-area-inset-bottom)); overflow-y: auto; }
+
+/* ---------- Forms ---------- */
+.field { display: flex; flex-direction: column; gap: 6px; }
+.fieldLabel { font-size: 12px; font-weight: 600; color: var(--muted); }
+.input, .textarea { width: 100%; background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; color: var(--text); font-size: 14px; font-family: inherit; outline: none; transition: border-color .2s ease, box-shadow .2s ease; }
+.input:focus, .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,109,58,0.15); }
+.input::placeholder, .textarea::placeholder { color: var(--muted); }
+.textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+.textarea.monoText { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; min-height: 180px; }
+.formStack { display: flex; flex-direction: column; gap: 12px; }
+.inputRow { position: relative; }
+.inputRow .input { padding-right: 44px; }
+.eyeBtn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--muted); padding: 6px; cursor: pointer; }
+.hint { font-size: 11.5px; color: var(--muted); margin: 0; }
+.counter { font-size: 11.5px; color: var(--muted); text-align: right; margin: 0; }
+.inlineError { background: #FF5C5C14; border: 1px solid #FF5C5C44; color: #FFA3A3; border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+.inlineWarn { background: #FFB34714; border: 1px solid #FFB34744; color: #FFD08A; border-radius: 12px; padding: 10px 12px; font-size: 12.5px; line-height: 1.5; }
+.segment { display: flex; background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 3px; }
+.segBtn { flex: 1; background: transparent; border: none; color: var(--muted); font-weight: 700; font-size: 13px; padding: 9px; border-radius: 9px; cursor: pointer; transition: background .2s ease, color .2s ease; }
+.segBtn.active { background: linear-gradient(135deg, var(--accent), var(--accent3)); color: #0F0F0F; }
+
+/* ---------- Buttons ---------- */
+.btnRow { display: flex; gap: 10px; flex-wrap: wrap; }
+.btnRow > .primaryBtn, .btnRow > .glassBtn, .btnRow > .dangerBtn { min-width: 130px; }
+.primaryBtn:disabled, .glassBtn:disabled, .dangerBtn:disabled { opacity: .5; cursor: not-allowed; }
+a.primaryBtn, a.glassBtn { text-decoration: none; }
+.smallBtn { flex: 0 0 auto !important; padding: 8px 12px !important; font-size: 12px !important; border-radius: 10px !important; min-width: 0 !important; }
+.dangerBtn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 13px; font-weight: 700; border-radius: 12px; padding: 12px; cursor: pointer; background: #FF5C5C14; color: #FF8A8A; border: 1px solid #FF5C5C55; transition: transform .15s ease; }
+.dangerBtn:active { transform: scale(.96); }
+.linkBtn { background: transparent; border: none; color: var(--accent); font-weight: 700; font-size: 13px; cursor: pointer; padding: 0; }
+
+/* ---------- Chips / filters / pager ---------- */
+.filterRow { display: flex; gap: 8px; flex-wrap: wrap; }
+.filterChip { background: var(--card2); border: 1px solid var(--border); color: var(--text); font-size: 12px; border-radius: 999px; padding: 7px 13px; cursor: pointer; transition: border-color .2s ease; }
+.filterChip.active { border-color: var(--accent); color: var(--accent2); background: rgba(255,122,0,0.1); }
+.pagerRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 4px; }
+
+/* ---------- Loading / empty ---------- */
+.loadingBox { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 10px; text-align: center; }
+.loadingBox svg { color: var(--accent); }
+.splash { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 40px 20px; text-align: center; min-height: 100vh; }
+
+/* ---------- Pipeline stages / results ---------- */
+.stageRow { display: flex; align-items: flex-start; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+.stageRow:first-of-type { border-top: none; padding-top: 0; }
+.stageRow svg { flex-shrink: 0; margin-top: 2px; }
+.stageName { font-size: 13.5px; font-weight: 700; margin: 0; text-transform: capitalize; }
+.stageMeta { font-size: 12px; color: var(--muted); margin: 2px 0 0; word-break: break-word; }
+.flowLine { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; justify-content: center; }
+.detailsBox { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+.detailsBox summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--accent2); }
+.detailsBox pre { margin: 10px 0 0; max-height: 260px; overflow: auto; font-size: 11.5px; color: #9FE6B8; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.exampleChips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- Rendered AI text ---------- */
+.aiText { font-size: 13.5px; line-height: 1.6; word-break: break-word; }
+.aiText p { margin: 0 0 8px; }
+.aiText ul { margin: 0 0 8px; padding-left: 18px; }
+.aiText li { margin-bottom: 4px; }
+.aiText h4 { font-size: 14px; margin: 12px 0 6px; color: var(--accent2); }
+.aiText pre { background: #0D0D0E; border: 1px solid var(--border); border-radius: 10px; padding: 10px; overflow-x: auto; margin: 0 0 8px; }
+.aiText pre code { background: none; padding: 0; font-size: 12px; color: #9FE6B8; white-space: pre; }
+.aiText code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: rgba(255,255,255,.08); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
+.bubbleAI .aiText { font-size: 13.5px; }
+.bubbleAI .aiText > *:last-child { margin-bottom: 0; }
+
+/* ---------- Landing ---------- */
+.landingHero { padding: 34px 20px 8px; }
+.landingFeatures { display: flex; flex-wrap: wrap; gap: 8px; padding: 6px 20px 4px; }
+.authCard { margin: 14px 16px 0; }
+.statusDot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.statusOnline { background: #33D6A6; } .statusOffline { background: #FF6B6B; } .statusUnknown { background: var(--muted); }
+.statusLine { display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--muted); padding: 14px 0 6px; }
