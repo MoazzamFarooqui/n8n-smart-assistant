@@ -16,6 +16,14 @@ import {
   getWorkflowExecutionsByWorkflowIdPaginated,
   getExecutionStatsByWorkflowId,
 } from '../models/WorkflowExecution.js';
+import {
+  CREDENTIAL_APPS,
+  detectRequiredCredentials,
+  missingCredentials,
+  splitSkipApps,
+  toPublicSpec,
+} from '../services/credentials.js';
+import { listUserCredentials } from '../models/UserCredential.js';
 
 const router = Router();
 
@@ -56,6 +64,7 @@ async function findOwnedWorkflow(req: AuthRequest, res: Response): Promise<Workf
 
 const generateAndDeploySchema = z.object({
   prompt: z.string().trim().min(10, 'prompt must be at least 10 characters').max(2000, 'prompt is too long'),
+  skipApps: z.array(z.string().trim().min(1).max(50)).max(20).optional(),
 });
 
 const listQuerySchema = z.object({
@@ -78,8 +87,16 @@ router.post('/generate-and-deploy', authenticate, async (req: AuthRequest, res: 
   const parsed = generateAndDeploySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ errors: parsed.error.flatten() });
 
+  const { valid: skipApps, unknown } = splitSkipApps(parsed.data.skipApps);
+  if (unknown.length > 0) {
+    return res.status(400).json({
+      error: `Unknown app(s) in skipApps: ${unknown.join(', ')}`,
+      availableApps: CREDENTIAL_APPS,
+    });
+  }
+
   try {
-    const result = await runPipeline(req.user!.id, parsed.data.prompt);
+    const result = await runPipeline(req.user!.id, parsed.data.prompt, { skipApps });
     res.json(result);
   } catch (error) {
     if (error instanceof PipelineError) {
@@ -87,6 +104,7 @@ router.post('/generate-and-deploy', authenticate, async (req: AuthRequest, res: 
         error: error.message,
         stage: error.stage,
         stages: error.stages,
+        ...(error.payload ?? {}),
       });
     }
     console.error('workflow pipeline error:', error);
@@ -162,6 +180,13 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       getWorkflowExecutionsByWorkflowIdPaginated(workflow.id, { page: 1, limit: 10 }),
     ]);
 
+    const definitionNodes = Array.isArray((workflow.definition as any)?.nodes)
+      ? ((workflow.definition as any).nodes as any[])
+      : [];
+    const requiredCredentials = detectRequiredCredentials(definitionNodes);
+    const linkedCredentials = await listUserCredentials(req.user!.id);
+    const missing = missingCredentials(requiredCredentials, linkedCredentials);
+
     let n8nInfo: Record<string, unknown>;
     if (!workflow.n8n_workflow_id) {
       n8nInfo = { available: false, error: 'Workflow has not been deployed to n8n yet' };
@@ -201,6 +226,10 @@ router.get('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       },
       executionStats: stats,
       executions: history.rows,
+      credentials: {
+        required: requiredCredentials.map(toPublicSpec),
+        missing: missing.map((spec) => spec.app),
+      },
       n8n: n8nInfo,
     });
   } catch (error) {
@@ -223,6 +252,23 @@ router.post('/:id/execute', authenticate, async (req: AuthRequest, res: Response
   }
 
   try {
+    const definitionNodes = Array.isArray((workflow.definition as any)?.nodes)
+      ? ((workflow.definition as any).nodes as any[])
+      : [];
+    const requiredCredentials = detectRequiredCredentials(definitionNodes);
+    if (requiredCredentials.length > 0) {
+      const linkedCredentials = await listUserCredentials(req.user!.id);
+      const missing = missingCredentials(requiredCredentials, linkedCredentials);
+      if (missing.length > 0) {
+        const labels = missing.map((spec) => spec.label).join(', ');
+        return res.status(409).json({
+          error: `Credentials required before this workflow can run: ${labels}.`,
+          workflowId: workflow.id,
+          needsCredentials: missing.map(toPublicSpec),
+        });
+      }
+    }
+
     const result = await rerunWorkflow(req.user!.id, workflow, parsed.data.payload ?? {});
     res.json({
       workflowId: workflow.id,

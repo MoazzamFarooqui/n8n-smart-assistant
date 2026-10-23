@@ -3,11 +3,19 @@ import type { ResultSetHeader } from 'mysql2';
 import { callGemini, SYSTEM_PROMPTS } from './gemini.js';
 import * as n8n from './n8n.js';
 import { N8nError, type N8nExecution, type N8nNode, type N8nWorkflow } from './n8n.js';
+import {
+  detectRequiredCredentials,
+  injectCredentials,
+  linkedCredentialsMap,
+  missingCredentials,
+  toPublicSpec,
+} from './credentials.js';
+import { listUserCredentials } from '../models/UserCredential.js';
 import { pool } from '../config/db.js';
 import { config } from '../config/env.js';
 
 export interface StageReport {
-  stage: 'generate' | 'validate' | 'audit' | 'deploy' | 'execute';
+  stage: 'generate' | 'credentials' | 'validate' | 'audit' | 'deploy' | 'execute';
   ok: boolean;
   ms: number;
   error?: string;
@@ -38,13 +46,15 @@ export class PipelineError extends Error {
   stage: string;
   status: number;
   stages: StageReport[];
+  payload?: Record<string, unknown>;
 
-  constructor(stage: string, message: string, status: number, stages: StageReport[]) {
+  constructor(stage: string, message: string, status: number, stages: StageReport[], payload?: Record<string, unknown>) {
     super(message);
     this.name = 'PipelineError';
     this.stage = stage;
     this.status = status;
     this.stages = stages;
+    this.payload = payload;
   }
 }
 
@@ -156,6 +166,49 @@ function normalizeSetNode(parameters: any): { parameters: any; version?: number 
   };
 }
 
+const SLACK_NODE_TYPE = 'n8n-nodes-base.slack';
+const SLACK_NODE_VERSION = 2.7;
+
+function toResourceLocator(value: unknown): { __rl: true; mode: string; value: string } | undefined {
+  if (typeof value === 'string' && value.trim()) {
+    const v = value.trim();
+    return { __rl: true, mode: /^[CGD][A-Z0-9]{2,}$/.test(v) ? 'id' : 'name', value: v };
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const v = value as { value?: unknown; mode?: unknown };
+    if (typeof v.value === 'string' && v.value.trim()) {
+      return {
+        __rl: true,
+        mode: typeof v.mode === 'string' && v.mode ? v.mode : 'id',
+        value: v.value.trim(),
+      };
+    }
+  }
+  return undefined;
+}
+
+function normalizeSlackNode(parameters: any): { parameters: any; version?: number } | undefined {
+  const p = parameters ?? {};
+  const resource = typeof p.resource === 'string' ? p.resource : 'message';
+  const operation = typeof p.operation === 'string' ? p.operation : 'post';
+  if (resource !== 'message' || (operation !== 'post' && operation !== 'schedule')) return undefined;
+
+  const out: any = { ...p, resource, operation };
+  if (!out.messageType) out.messageType = 'text';
+  if (!out.select) out.select = out.user ? 'user' : 'channel';
+
+  if (out.select === 'channel') {
+    const rl = toResourceLocator(out.channelId ?? out.channel);
+    if (rl) out.channelId = rl;
+    delete out.channel;
+  } else if (out.select === 'user') {
+    const rl = toResourceLocator(out.user);
+    if (rl) out.user = rl;
+  }
+
+  return { parameters: out, version: SLACK_NODE_VERSION };
+}
+
 function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('AI response was not a JSON workflow object');
@@ -185,6 +238,16 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
         built.typeVersion = normalized.version ?? built.typeVersion;
       }
     }
+    if (built.type === SLACK_NODE_TYPE) {
+      const normalized = normalizeSlackNode(built.parameters);
+      if (normalized) {
+        built.parameters = normalized.parameters;
+        built.typeVersion = normalized.version ?? built.typeVersion;
+      }
+    }
+    // AI models invent credential ids (e.g. YOUR_CREDENTIAL_ID); real
+    // credentials are injected later from the user's linked apps.
+    delete (built as any).credentials;
     return built;
   });
 
@@ -291,7 +354,11 @@ async function analyzeError(workflowName: string, prompt: string, errorText: str
   }
 }
 
-export async function runPipeline(userId: number, prompt: string): Promise<PipelineResult> {
+export async function runPipeline(
+  userId: number,
+  prompt: string,
+  options: { skipApps?: string[] } = {}
+): Promise<PipelineResult> {
   const stages: StageReport[] = [];
   const overallStart = Date.now();
 
@@ -311,6 +378,76 @@ export async function runPipeline(userId: number, prompt: string): Promise<Pipel
   } catch (err) {
     stages.push({ stage: 'generate', ok: false, ms: Date.now() - generateStart, error: msg(err) });
     throw new PipelineError('generate', `Workflow generation failed: ${msg(err)}`, 502, stages);
+  }
+
+  const credentialsStart = Date.now();
+  let definitionNodes: N8nNode[] = [];
+  try {
+    const required = detectRequiredCredentials(clean.nodes);
+    const linked = await listUserCredentials(userId);
+    const linkedMap = linkedCredentialsMap(linked);
+    const skipped = new Set(options.skipApps ?? []);
+
+    const usedSkipped = required.filter((spec) => skipped.has(spec.app));
+    if (usedSkipped.length > 0) {
+      const labels = usedSkipped.map((spec) => spec.label).join(', ');
+      stages.push({
+        stage: 'credentials',
+        ok: false,
+        ms: Date.now() - credentialsStart,
+        error: `Workflow needs ${labels}, but the app was skipped`,
+      });
+      throw new PipelineError(
+        'credentials',
+        `This workflow needs ${labels}, which you chose to skip. Generate a workflow without ${labels}.`,
+        422,
+        stages,
+        { skippedApps: usedSkipped.map((spec) => spec.app) }
+      );
+    }
+
+    const missing = missingCredentials(required, linked);
+    if (missing.length > 0) {
+      const labels = missing.map((spec) => spec.label).join(', ');
+      stages.push({
+        stage: 'credentials',
+        ok: false,
+        ms: Date.now() - credentialsStart,
+        error: `Credentials required: ${labels}`,
+      });
+      throw new PipelineError(
+        'credentials',
+        `Credentials required before this workflow can run: ${labels}. Add them via POST /api/credentials, link an existing n8n credential, or skip the app.`,
+        409,
+        stages,
+        {
+          needsCredentials: missing.map(toPublicSpec),
+          workflowPreview: {
+            name: clean.name,
+            nodes: clean.nodes,
+            connections: clean.connections,
+          },
+        }
+      );
+    }
+
+    // Keep the stored definition free of injected credential ids.
+    definitionNodes = JSON.parse(JSON.stringify(clean.nodes)) as N8nNode[];
+    injectCredentials(clean.nodes, linkedMap);
+
+    stages.push({
+      stage: 'credentials',
+      ok: true,
+      ms: Date.now() - credentialsStart,
+      detail: {
+        required: required.map((spec) => spec.app),
+        linked: required.map((spec) => spec.app),
+      },
+    });
+  } catch (err) {
+    if (err instanceof PipelineError) throw err;
+    stages.push({ stage: 'credentials', ok: false, ms: Date.now() - credentialsStart, error: msg(err) });
+    throw new PipelineError('credentials', `Credential setup failed: ${msg(err)}`, 500, stages);
   }
 
   const validateStart = Date.now();
@@ -376,7 +513,7 @@ export async function runPipeline(userId: number, prompt: string): Promise<Pipel
         userId,
         clean.name,
         `AI generated from prompt: ${prompt.slice(0, 200)}`,
-        JSON.stringify({ nodes: clean.nodes, connections: clean.connections }),
+        JSON.stringify({ nodes: definitionNodes.length > 0 ? definitionNodes : clean.nodes, connections: clean.connections }),
         0,
         created.id,
         prompt,

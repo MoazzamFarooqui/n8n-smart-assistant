@@ -59,6 +59,20 @@ export interface CreateWorkflowInput {
   description?: string;
 }
 
+export interface N8nCredential {
+  id: string;
+  name: string;
+  type: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CreateCredentialInput {
+  name: string;
+  type: string;
+  data: Record<string, unknown>;
+}
+
 export interface WebhookTriggerResult {
   webhookUrl: string;
   nodeName: string;
@@ -92,7 +106,12 @@ function toN8nError(err: unknown): N8nError {
     let message: unknown = (ax.response.data as any)?.message || ax.message;
     if (Array.isArray(message)) message = message.join('; ');
     if (n8nStatus === 401 || n8nStatus === 403) {
-      return new N8nError(`n8n rejected the request (${n8nStatus}). Check N8N_API_KEY.`, 502, n8nStatus, ax.response.data);
+      return new N8nError(
+        `n8n rejected the request (${n8nStatus}). Check N8N_API_KEY (for credential endpoints the key needs credential scopes).`,
+        502,
+        n8nStatus,
+        ax.response.data
+      );
     }
     if (n8nStatus === 404) {
       return new N8nError(String(message || 'Not found in n8n'), 404, n8nStatus, ax.response.data);
@@ -397,3 +416,51 @@ export function summarizeExecution(execution: N8nExecution) {
       : null,
   };
 }
+
+export async function listCredentials(params: {
+  limit?: number;
+  cursor?: string;
+} = {}): Promise<{ data: N8nCredential[]; nextCursor: string | null }> {
+  return request(
+    {
+      method: 'GET',
+      url: '/credentials',
+      params: {
+        limit: params.limit ?? 100,
+        ...(params.cursor ? { cursor: params.cursor } : {}),
+      },
+    },
+    { retry: true }
+  );
+}
+
+export async function getCredential(id: string): Promise<N8nCredential> {
+  return request({ method: 'GET', url: `/credentials/${encodeURIComponent(id)}` }, { retry: true });
+}
+
+export async function createCredential(input: CreateCredentialInput): Promise<N8nCredential> {
+  return request({
+    method: 'POST',
+    url: '/credentials',
+    data: { name: input.name, type: input.type, data: input.data },
+  });
+}
+
+export async function updateCredential(
+  id: string,
+  input: { name?: string; data?: Record<string, unknown> }
+): Promise<N8nCredential> {
+  return request({
+    method: 'PATCH',
+    url: `/credentials/${encodeURIComponent(id)}`,
+    data: {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.data !== undefined ? { data: input.data } : {}),
+    },
+  });
+}
+
+export async function deleteCredential(id: string): Promise<N8nCredential> {
+  return request({ method: 'DELETE', url: `/credentials/${encodeURIComponent(id)}` });
+}
+

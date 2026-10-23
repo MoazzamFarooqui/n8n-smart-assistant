@@ -9,12 +9,15 @@
  * Usage: npm run verify:phase5
  *
  * It generates two real workflows through the Phase 4 pipeline (one succeeds,
- * one fails without credentials), then exercises the Phase 5 management API:
- * listing + pagination, detail with execution history, ownership isolation,
- * re-execution, activate/deactivate and delete from n8n + database.
+ * one needs Telegram credentials: 409 → link fake credential → deploys and
+ * fails), then exercises the Phase 5 management API: listing + pagination,
+ * detail with execution history, ownership isolation, re-execution,
+ * activate/deactivate and delete from n8n + database.
  */
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
+
+const FAKE_TELEGRAM_TOKEN = '123456789:AAFakeTokenForVerificationOnly';
 
 let passed = 0;
 let failed = 0;
@@ -41,9 +44,25 @@ async function req(method: string, path: string, body?: unknown, token?: string)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const SUCCESS_PROMPT =
-  'Create a simple workflow: start with a Webhook trigger (POST), then a Set node that assigns a string field "message" with the value "hello from phase 5". Return only JSON.';
+  'Create a simple workflow: start with a Webhook trigger (POST), then a Set node that assigns a string field "message" with the value "hello from phase 5". Connect the Webhook trigger to the Set node. Return only JSON.';
 
-const ERROR_PROMPT = 'Send a Telegram message when a Google Form is submitted';
+async function generateWithRetry(
+  token: string,
+  prompt: string,
+  extra: Record<string, unknown> = {},
+  attempts = 3
+) {
+  let res = await req('POST', '/api/workflows/generate-and-deploy', { prompt, ...extra }, token);
+  for (let i = 1; i < attempts && (res.status === 502 || res.status === 504); i++) {
+    console.log(`  (transient ${res.status} from Gemini — retry ${i}/${attempts - 1} in 20s)…`);
+    await sleep(20000);
+    res = await req('POST', '/api/workflows/generate-and-deploy', { prompt, ...extra }, token);
+  }
+  return res;
+}
+
+const ERROR_PROMPT =
+  'Send a Telegram message with the text "hello" to chat 12345 when a webhook receives a request';
 
 async function main() {
   console.log('\n=== PHASE 5 VERIFICATION (workflow management CRUD) ===\n');
@@ -82,7 +101,7 @@ async function main() {
 
   // 5) Deploy a workflow through the Phase 4 pipeline
   console.log('\n  [setup] generating + deploying a credential-free workflow… (can take up to a minute)');
-  const gen = await req('POST', '/api/workflows/generate-and-deploy', { prompt: SUCCESS_PROMPT }, token);
+  const gen = await generateWithRetry(token, SUCCESS_PROMPT);
   const genBody = gen.body ?? {};
   const wfId = genBody.workflowId as number;
   const n8nId = genBody.n8nWorkflowId as string;
@@ -210,67 +229,108 @@ async function main() {
   );
 
   // pacing for free-tier Gemini limits
-  console.log('\n  [pacing] waiting 3s before the error-path test…');
+  console.log('\n  [pacing] waiting 3s before the credentials test…');
   await sleep(3000);
 
-  // 15) Failing re-execution returns AI error analysis
-  console.log('\n  [error path] Telegram prompt (needs credentials) → re-execution should fail with AI analysis…');
-  const genErr = await req('POST', '/api/workflows/generate-and-deploy', { prompt: ERROR_PROMPT }, token);
+  // 15) Missing credentials are blocked before deploy
+  console.log('\n  [credentials gate] Telegram prompt without credentials → should be blocked (409)…');
+  const blocked = await generateWithRetry(token, ERROR_PROMPT);
+  const blockedNeeds: any[] = Array.isArray(blocked.body?.needsCredentials)
+    ? blocked.body.needsCredentials
+    : [];
+  record(
+    blocked.status === 409 &&
+      blocked.body?.stage === 'credentials' &&
+      blockedNeeds.some((n) => n.app === 'telegram'),
+    '15. Missing credentials blocked with 409 + needsCredentials',
+    `status=${blocked.status} apps=${blockedNeeds.map((n) => n.app).join(',') || 'none'}`
+  );
+
+  // 16) Link a fake Telegram credential
+  const addCred = await req(
+    'POST',
+    '/api/credentials',
+    { app: 'telegram', name: 'Phase 5 fake Telegram', data: { accessToken: FAKE_TELEGRAM_TOKEN } },
+    token
+  );
+  record(
+    addCred.status === 200 || addCred.status === 201,
+    '16. Fake Telegram credential linked',
+    `status=${addCred.status} n8nCredentialId=${addCred.body?.n8nCredentialId}`
+  );
+
+  // pacing for free-tier Gemini limits
+  console.log('\n  [pacing] waiting 3s before the retry…');
+  await sleep(3000);
+
+  // 17) Retry with credentials → workflow deploys (execution fails with fake token)
+  console.log('\n  [error path] retry with injected credentials → workflow deploys, execution fails…');
+  const genErr = await generateWithRetry(token, ERROR_PROMPT);
   const errWfId = genErr.body?.workflowId as number;
   const errN8nId = genErr.body?.n8nWorkflowId as string;
 
   if (!errWfId || !errN8nId) {
-    record(false, '15. Error workflow deployed for testing', `status ${genErr.status} pipeline=${genErr.body?.status}`);
-    record(false, '16. Failing re-execution returns AI error analysis', 'skipped — no error workflow');
-    record(false, '17. Error execution stored with analysis', 'skipped — no error workflow');
+    record(false, '17. Error workflow deployed for testing', `status ${genErr.status} pipeline=${genErr.body?.status}`);
+    record(false, '18. Failing re-execution returns AI error analysis', 'skipped — no error workflow');
+    record(false, '19. Error execution stored with analysis', 'skipped — no error workflow');
   } else {
-    record(true, '15. Error workflow deployed for testing', `workflowId=${errWfId} pipeline=${genErr.body?.status}`);
+    record(
+      true,
+      '17. Error workflow deployed for testing',
+      `workflowId=${errWfId} pipeline=${genErr.body?.status}`
+    );
+
+    // pacing for free-tier Gemini limits (deploy failure already used one analysis call)
+    await sleep(3000);
 
     const errRun = await req('POST', `/api/workflows/${errWfId}/execute`, {}, token);
     const errExec = errRun.body?.execution ?? {};
     const analysis = String(errExec.errorAnalysis ?? '');
     record(
       errRun.status === 200 && errRun.body?.status === 'failed' && analysis.length > 20 && !!errExec.error,
-      '16. Failing re-execution returns AI error analysis',
+      '18. Failing re-execution returns AI error analysis',
       analysis.slice(0, 120).replace(/\n/g, ' ') || `status=${errRun.body?.status}`
     );
 
     const errHist = await req('GET', `/api/workflows/${errWfId}/executions?limit=1`, undefined, token);
     const latest = errHist.body?.data?.[0];
     record(
-      errHist.status === 200 && latest?.status === 'failed' && typeof latest?.error_analysis === 'string' && latest.error_analysis.length > 20,
-      '17. Error execution stored with analysis',
+      errHist.status === 200 &&
+        latest?.status === 'failed' &&
+        typeof latest?.error_analysis === 'string' &&
+        latest.error_analysis.length > 20,
+      '19. Error execution stored with analysis',
       `status=${latest?.status} analysis=${String(latest?.error_analysis ?? '').slice(0, 80).replace(/\n/g, ' ')}`
     );
   }
 
-  // 18) Pagination splits pages correctly
+  // 20) Pagination splits pages correctly
   const page1 = await req('GET', '/api/workflows?page=1&limit=1', undefined, token);
   const page2 = await req('GET', '/api/workflows?page=2&limit=1', undefined, token);
   const p1 = page1.body?.pagination ?? {};
   const idsDiffer = page1.body?.data?.[0]?.id !== page2.body?.data?.[0]?.id;
   record(
     p1.total >= 2 && page1.body?.data?.length === 1 && page2.body?.data?.length === 1 && idsDiffer && p1.hasNext === true,
-    '18. Pagination splits pages correctly',
+    '20. Pagination splits pages correctly',
     `total=${p1.total} page1HasNext=${p1.hasNext} differentItems=${idsDiffer}`
   );
 
-  // 19) Delete removes from n8n + DB
+  // 21) Delete removes from n8n + DB
   const del = await req('DELETE', `/api/workflows/${wfId}`, undefined, token);
   const goneDb = await req('GET', `/api/workflows/${wfId}`, undefined, token);
   const goneN8n = await req('GET', `/api/n8n/workflows/${n8nId}`, undefined, token);
   record(
     del.status === 200 && del.body?.deleted === true && del.body?.n8nDeleted === true && goneDb.status === 404 && goneN8n.status === 404,
-    '19. Delete removes the workflow from n8n + DB',
+    '21. Delete removes the workflow from n8n + DB',
     `delete=${del.status} dbAfter=${goneDb.status} n8nAfter=${goneN8n.status}`
   );
 
-  // 20) Deleting again → 404
+  // 22) Deleting again → 404
   const delAgain = await req('DELETE', `/api/workflows/${wfId}`, undefined, token);
-  record(delAgain.status === 404, '20. Second delete returns 404', `status ${delAgain.status}`);
+  record(delAgain.status === 404, '22. Second delete returns 404', `status ${delAgain.status}`);
 
-  // cleanup: remove the error-path test workflow (success one already deleted)
-  console.log('\n  (cleanup) removing the remaining test workflow…');
+  // cleanup: remove the error-path test workflow + credential (success one already deleted)
+  console.log('\n  (cleanup) removing the remaining test workflow + credential…');
   const cleanupTargets: number[] = errWfId ? [errWfId] : [];
   let cleaned = 0;
   for (const id of cleanupTargets) {
@@ -279,6 +339,9 @@ async function main() {
     else console.log(`  WARN: could not delete workflow ${id} (status ${d.status}) — remove it manually`);
   }
   console.log(`  cleaned ${cleaned}/${cleanupTargets.length} workflow(s)`);
+
+  const credDel = await req('DELETE', '/api/credentials/telegram', undefined, token);
+  console.log(`  removed test credential: ${credDel.status === 200 ? 'yes' : `no (status ${credDel.status})`}`);
 
   console.log(`\n=== RESULT: ${passed} passed, ${failed} failed ===\n`);
   process.exit(failed === 0 ? 0 : 1);
