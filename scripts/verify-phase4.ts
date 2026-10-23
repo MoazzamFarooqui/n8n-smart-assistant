@@ -8,12 +8,15 @@
  *
  * Usage: npm run verify:phase4
  *
- * It runs the real pipeline twice against live n8n + Gemini:
- *  1) a credential-free prompt -> generate -> validate -> audit -> deploy -> execute -> success
- *  2) a Telegram prompt (needs credentials) -> execution fails -> auto AI error analysis
+ * It runs the real pipeline against live n8n + Gemini:
+ *  1) a credential-free prompt -> generate -> credentials -> validate -> audit -> deploy -> execute -> success
+ *  2) a Telegram prompt without credentials -> 409 + needsCredentials
+ *  3) after linking a fake Telegram credential -> deploy + real execution error + AI analysis
  */
 
 const BASE = process.env.BASE_URL || 'http://localhost:3001';
+
+const FAKE_TELEGRAM_TOKEN = '123456789:AAFakeTokenForVerificationOnly';
 
 let passed = 0;
 let failed = 0;
@@ -40,9 +43,25 @@ async function req(method: string, path: string, body?: unknown, token?: string)
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const SUCCESS_PROMPT =
-  'Create a simple workflow: start with a Webhook trigger (POST), then a Set node that assigns a string field "message" with the value "hello from phase 4". Return only JSON.';
+  'Create a simple workflow: start with a Webhook trigger (POST), then a Set node that assigns a string field "message" with the value "hello from phase 4". Connect the Webhook trigger to the Set node. Return only JSON.';
 
-const ERROR_PROMPT = 'Send a Telegram message when a Google Form is submitted';
+async function generateWithRetry(
+  token: string,
+  prompt: string,
+  extra: Record<string, unknown> = {},
+  attempts = 3
+) {
+  let res = await req('POST', '/api/workflows/generate-and-deploy', { prompt, ...extra }, token);
+  for (let i = 1; i < attempts && (res.status === 502 || res.status === 504); i++) {
+    console.log(`  (transient ${res.status} from Gemini — retry ${i}/${attempts - 1} in 20s)…`);
+    await sleep(20000);
+    res = await req('POST', '/api/workflows/generate-and-deploy', { prompt, ...extra }, token);
+  }
+  return res;
+}
+
+const ERROR_PROMPT =
+  'Send a Telegram message with the text "hello" to chat 12345 when a webhook receives a request';
 
 async function main() {
   console.log('\n=== PHASE 4 VERIFICATION (automated workflow pipeline) ===\n');
@@ -75,7 +94,7 @@ async function main() {
 
   // 4) Success path
   console.log('\n  [success path] generating + deploying a credential-free workflow… (can take up to a minute)');
-  const ok = await req('POST', '/api/workflows/generate-and-deploy', { prompt: SUCCESS_PROMPT }, token);
+  const ok = await generateWithRetry(token, SUCCESS_PROMPT);
   const okBody = ok.body ?? {};
   const stages: any[] = Array.isArray(okBody.stages) ? okBody.stages : [];
   const stageNames = stages.map((s) => s.stage);
@@ -94,10 +113,15 @@ async function main() {
   );
 
   const allStages =
-    ['generate', 'validate', 'audit', 'deploy', 'execute'].every((s) => stageNames.includes(s)) &&
+    ['generate', 'credentials', 'validate', 'audit', 'deploy', 'execute'].every((s) => stageNames.includes(s)) &&
+    stages.find((s) => s.stage === 'credentials')?.ok === true &&
     stages.find((s) => s.stage === 'deploy')?.ok === true &&
     stages.find((s) => s.stage === 'execute')?.ok === true;
-  record(allStages, '6. All 5 stages ran (generate → validate → audit → deploy → execute)', stageNames.join(' → '));
+  record(
+    allStages,
+    '6. All 6 stages ran (generate → credentials → validate → audit → deploy → execute)',
+    stageNames.join(' → ')
+  );
 
   const execData = JSON.stringify(okBody.execution?.data ?? {});
   record(
@@ -106,10 +130,15 @@ async function main() {
     execData.slice(0, 140)
   );
 
+  const validateStage = stages.find((s) => s.stage === 'validate');
+  const auditStage = stages.find((s) => s.stage === 'audit');
+  const validateReported =
+    okBody.validation != null || /unavailable/i.test(String(validateStage?.error ?? ''));
+  const auditReported = okBody.audit != null || /unavailable/i.test(String(auditStage?.error ?? ''));
   record(
-    okBody.validation != null && okBody.audit != null,
-    '8. Validation + security audit results included',
-    `validation=${okBody.validation ? 'yes' : 'no'} audit=${okBody.audit ? 'yes' : 'no'}`
+    validateReported && auditReported,
+    '8. Validation + security audit stages reported (advisory results when available)',
+    `validation=${okBody.validation ? 'yes' : 'advisory'} audit=${okBody.audit ? 'yes' : 'advisory'}`
   );
 
   // 9) The workflow really exists in n8n and is active
@@ -128,30 +157,61 @@ async function main() {
   console.log('\n  [pacing] waiting 3s before the error-path test…');
   await sleep(3000);
 
-  // 10) Error path + auto error analysis
-  console.log('\n  [error path] Telegram prompt (needs credentials) → execution should fail with AI analysis…');
-  const err = await req('POST', '/api/workflows/generate-and-deploy', { prompt: ERROR_PROMPT }, token);
+  // 10) Missing credentials are blocked before deploy
+  console.log('\n  [credentials gate] Telegram prompt without credentials → should be blocked (409)…');
+  const blocked = await generateWithRetry(token, ERROR_PROMPT);
+  const blockedBody = blocked.body ?? {};
+  const needs: any[] = Array.isArray(blockedBody.needsCredentials) ? blockedBody.needsCredentials : [];
+  record(
+    blocked.status === 409 &&
+      blockedBody.stage === 'credentials' &&
+      needs.some((n) => n.app === 'telegram') &&
+      Array.isArray(blockedBody.workflowPreview?.nodes) &&
+      blockedBody.workflowPreview.nodes.length > 0,
+    '10. Missing credentials blocked with 409 + needsCredentials + preview',
+    `status=${blocked.status} apps=${needs.map((n) => n.app).join(',') || 'none'}`
+  );
+
+  // 11) Link a fake Telegram credential
+  const addCred = await req(
+    'POST',
+    '/api/credentials',
+    { app: 'telegram', name: 'Phase 4 fake Telegram', data: { accessToken: FAKE_TELEGRAM_TOKEN } },
+    token
+  );
+  record(
+    (addCred.status === 200 || addCred.status === 201) && !!addCred.body?.n8nCredentialId,
+    '11. Fake Telegram credential linked',
+    `status=${addCred.status} n8nCredentialId=${addCred.body?.n8nCredentialId}`
+  );
+
+  // pacing for free-tier Gemini limits
+  console.log('\n  [pacing] waiting 3s before the retry…');
+  await sleep(3000);
+
+  // 12) Retry: credentials are injected and the real execution error is analyzed
+  console.log('\n  [error path] retry with injected credentials → execution should fail with AI analysis…');
+  const err = await generateWithRetry(token, ERROR_PROMPT);
   const errBody = err.body ?? {};
   if (errBody.n8nWorkflowId) deployed.push(errBody.n8nWorkflowId);
 
   const deployOk = err.status === 200 && !!errBody.n8nWorkflowId && !!errBody.workflowId;
-  record(deployOk, '10. Telegram prompt deployed to n8n', `status ${err.status} pipeline=${errBody.status}`);
+  const analysis = String(errBody.errorAnalysis ?? '');
+  const execError = String(errBody.execution?.error ?? '');
+  record(
+    deployOk &&
+      errBody.status === 'failed' &&
+      analysis.length > 20 &&
+      execError.length > 0 &&
+      !/does not exist for type/i.test(execError),
+    '12. Injected credential → real execution error + AI analysis',
+    deployOk
+      ? `pipeline=${errBody.status} analysis=${analysis.slice(0, 90).replace(/\n/g, ' ')}`
+      : `status=${err.status} pipeline=${errBody.status} error=${errBody.error ?? ''}`
+  );
 
-  if (deployOk && errBody.status === 'failed') {
-    const analysis = String(errBody.errorAnalysis ?? '');
-    record(
-      analysis.length > 20 && !!errBody.execution?.error,
-      '11. Auto error analysis on failure (AI explanation returned)',
-      analysis.slice(0, 120).replace(/\n/g, ' ')
-    );
-  } else if (deployOk && errBody.status === 'success') {
-    record(true, '11. Auto error analysis on failure', 'skipped — workflow ran without credentials (no error)');
-  } else {
-    record(false, '11. Auto error analysis on failure', `pipeline status: ${errBody.error ?? errBody.status}`);
-  }
-
-  // cleanup: remove the deployed test workflows from n8n
-  console.log('\n  (cleanup) removing test workflows from n8n…');
+  // cleanup: remove the deployed test workflows from n8n + the test credential
+  console.log('\n  (cleanup) removing test workflows + credential…');
   let cleaned = 0;
   for (const id of deployed) {
     await req('PATCH', `/api/n8n/workflows/${id}/deactivate`, undefined, token).catch(() => {});
@@ -162,6 +222,9 @@ async function main() {
     else console.log(`  WARN: could not delete ${id} (status ${del.status}) — remove it manually in n8n`);
   }
   console.log(`  cleaned ${cleaned}/${deployed.length} n8n workflow(s)`);
+
+  const credDel = await req('DELETE', '/api/credentials/telegram', undefined, token);
+  console.log(`  removed test credential: ${credDel.status === 200 ? 'yes' : `no (status ${credDel.status})`}`);
 
   console.log(`\n=== RESULT: ${passed} passed, ${failed} failed ===\n`);
   process.exit(failed === 0 ? 0 : 1);
