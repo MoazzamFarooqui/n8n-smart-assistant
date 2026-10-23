@@ -135,6 +135,7 @@ Requirements:
 - Use appropriate node types
 - Include necessary parameters
 - Add helpful comments in node names
+- Never add a "credentials" field to any node and never invent credential ids; the platform injects real credentials after the user provides them
 Return ONLY the JSON, no markdown, no explanation.`,
 
   validateWorkflow: `You are an n8n workflow validator. Check the provided workflow JSON for:
