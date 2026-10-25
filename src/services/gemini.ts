@@ -135,6 +135,11 @@ Requirements:
 - Use appropriate node types
 - Include necessary parameters
 - Add helpful comments in node names
+- Never add a "credentials" field to any node and never invent credential ids; the platform injects real credentials after the user provides them
+- Always use responseMode "lastNode" on any Webhook node — never use "responseNode"
+- Do NOT include a "Respond to Webhook" node (n8n-nodes-base.respondToWebhook)
+- Do NOT include Error Trigger nodes
+- For sending Discord messages via webhook, use node type "n8n-nodes-base.httpRequest" with method POST, url set to the Discord webhook URL placeholder "DISCORD_WEBHOOK_URL", and JSON body {"content": "<message text>"}. Do NOT use n8n-nodes-base.discord node type.
 Return ONLY the JSON, no markdown, no explanation.`,
 
   validateWorkflow: `You are an n8n workflow validator. Check the provided workflow JSON for:
@@ -142,7 +147,13 @@ Return ONLY the JSON, no markdown, no explanation.`,
 2. Required fields present
 3. Valid connections
 4. Node parameter validity
-5. Common issues (missing credentials, invalid expressions)
+5. Common issues (invalid expressions, wrong node types)
+IMPORTANT — do NOT flag any of the following as issues:
+- Credential IDs present on nodes — credentials are injected by the platform at runtime and are always valid; never flag credential references or unverified credential IDs
+- Missing error handling nodes or Error Trigger nodes — the platform has its own error handling layer
+- Webhook node using responseMode "lastNode" or "responseNode" — both are valid
+- Missing "Respond to Webhook" node — intentionally omitted; platform handles responses
+- Sender email addresses like "no-reply@..." or placeholder addresses — these are valid
 Return: { valid: boolean, issues: string[], suggestions: string[] }`,
 
   translateError: `You are an n8n error translator. Convert technical n8n errors into plain English.
