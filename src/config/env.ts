@@ -44,4 +44,8 @@ export const config = {
     timeoutMs: parseInt(process.env.N8N_TIMEOUT_MS || '15000', 10),
     maxRetries: parseInt(process.env.N8N_MAX_RETRIES || '2', 10),
   },
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+  },
 };
