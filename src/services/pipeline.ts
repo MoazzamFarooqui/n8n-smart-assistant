@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import type { ResultSetHeader } from 'mysql2';
-import { callGemini, SYSTEM_PROMPTS } from './gemini.js';
+import { callGemini, SYSTEM_PROMPTS, type AIResponse } from './gemini.js';
 import * as n8n from './n8n.js';
 import { N8nError, type N8nExecution, type N8nNode, type N8nWorkflow } from './n8n.js';
 import { pool } from '../config/db.js';
@@ -63,6 +63,75 @@ function msg(err: unknown): string {
   return String(err);
 }
 
+function isWordChar(ch: string): boolean {
+  return /[A-Za-z0-9_$]/.test(ch);
+}
+
+// AI models occasionally emit JSON5-style output. Repairs are only attempted
+// after a strict parse fails, so valid definitions are never mutated.
+function repairJson(text: string): string {
+  let out = '';
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      out += ch;
+      if (ch === '\\') {
+        out += text[i + 1] ?? '';
+        i++;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+      continue;
+    }
+    if (ch === ',') {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      if (text[j] === '}' || text[j] === ']') continue;
+      out += ch;
+      continue;
+    }
+    if (/[A-Za-z_$]/.test(ch)) {
+      const prev = out.replace(/\s+$/, '').slice(-1);
+      if (prev === '' || prev === '{' || prev === ',') {
+        let j = i;
+        while (j < text.length && isWordChar(text[j])) j++;
+        const word = text.slice(i, j);
+        let k = j;
+        while (k < text.length && /\s/.test(text[k])) k++;
+        if (text[k] === ':') {
+          out += `"${word}"`;
+          i = j - 1;
+          continue;
+        }
+      }
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function parseJsonWithRepair(candidate: string): unknown {
+  try {
+    return JSON.parse(candidate);
+  } catch (strictErr) {
+    const repaired = repairJson(candidate);
+    if (repaired !== candidate) {
+      try {
+        return JSON.parse(repaired);
+      } catch {
+        throw strictErr;
+      }
+    }
+    throw strictErr;
+  }
+}
+
 function extractJson(text: string): any {
   let cleaned = text.trim();
   const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -72,7 +141,7 @@ function extractJson(text: string): any {
   if (start === -1 || end === -1 || end <= start) {
     throw new Error('no JSON object found in the AI response');
   }
-  return JSON.parse(cleaned.slice(start, end + 1));
+  return parseJsonWithRepair(cleaned.slice(start, end + 1));
 }
 
 function safeExtractJson(text: string): { parsed?: unknown; raw?: string } {
@@ -156,6 +225,115 @@ function normalizeSetNode(parameters: any): { parameters: any; version?: number 
   };
 }
 
+const SLACK_NODE_TYPE = 'n8n-nodes-base.slack';
+const SLACK_NODE_VERSION = 2.7;
+
+const SMTP_NODE_TYPE = 'n8n-nodes-base.emailSend';
+
+function normalizeSmtpNode(parameters: any): { parameters: any } | undefined {
+  const p = parameters ?? {};
+  const out = { ...p };
+
+  // n8n emailSend node uses 'text' for plain text body and 'html' for HTML body.
+  // AI often generates 'body', 'message', or 'content' instead.
+  if (!out.text && !out.html) {
+    const body = out.body || out.message || out.content || out.emailBody || out.bodyText || '';
+    if (body) {
+      out.text = String(body);
+      delete out.body;
+      delete out.message;
+      delete out.content;
+      delete out.emailBody;
+      delete out.bodyText;
+    }
+  }
+
+  // Ensure subject is set
+  if (!out.subject) out.subject = 'Message from n8n';
+
+  // Ensure fromEmail is set — SMTP node requires a sender address
+  if (!out.fromEmail && !out.from) {
+    // Use toEmail as fallback sender, or a generic placeholder
+    out.fromEmail = out.toEmail || out.to || 'noreply@automation.local';
+  }
+
+  // Normalize toEmail field
+  if (!out.toEmail && out.to) {
+    out.toEmail = out.to;
+  }
+
+  return { parameters: out };
+}
+
+function toResourceLocator(value: unknown): { __rl: true; mode: string; value: string } | undefined {
+  if (typeof value === 'string' && value.trim()) {
+    const v = value.trim();
+    return { __rl: true, mode: /^[CGD][A-Z0-9]{2,}$/.test(v) ? 'id' : 'name', value: v };
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const v = value as { value?: unknown; mode?: unknown };
+    if (typeof v.value === 'string' && v.value.trim()) {
+      return {
+        __rl: true,
+        mode: typeof v.mode === 'string' && v.mode ? v.mode : 'id',
+        value: v.value.trim(),
+      };
+    }
+  }
+  return undefined;
+}
+
+function normalizeSlackNode(parameters: any): { parameters: any; version?: number } | undefined {
+  const p = parameters ?? {};
+  const resource = typeof p.resource === 'string' ? p.resource : 'message';
+  const operation = typeof p.operation === 'string' ? p.operation : 'post';
+  if (resource !== 'message' || (operation !== 'post' && operation !== 'schedule')) return undefined;
+
+  const out: any = { ...p, resource, operation };
+  if (!out.messageType) out.messageType = 'text';
+  if (!out.select) out.select = out.user ? 'user' : 'channel';
+
+  if (out.select === 'channel') {
+    const rl = toResourceLocator(out.channelId ?? out.channel);
+    if (rl) out.channelId = rl;
+    delete out.channel;
+  } else if (out.select === 'user') {
+    const rl = toResourceLocator(out.user);
+    if (rl) out.user = rl;
+  }
+
+  return { parameters: out, version: SLACK_NODE_VERSION };
+}
+
+const DISCORD_NODE_TYPE = 'n8n-nodes-base.discord';
+
+function normalizeDiscordNode(parameters: any, webhookUri?: string): { parameters: any; convertToHttp?: boolean; httpParameters?: any } | undefined {
+  const p = parameters ?? {};
+  const out = { ...p };
+
+  // If webhookUri is available, convert to HTTP Request node for reliability
+  if (webhookUri) {
+    return {
+      parameters: out,
+      convertToHttp: true,
+      httpParameters: {
+        method: 'POST',
+        url: webhookUri,
+        sendBody: true,
+        bodyParameters: {
+          parameters: [{ name: 'content', value: out.content || out.text || out.message || 'Message from n8n automation' }],
+        },
+        options: {},
+      },
+    };
+  }
+
+  if (!out.operation) out.operation = 'message';
+  if (!out.resource) out.resource = 'webhook';
+  return { parameters: out };
+}
+
+
 function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('AI response was not a JSON workflow object');
@@ -185,6 +363,27 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
         built.typeVersion = normalized.version ?? built.typeVersion;
       }
     }
+    if (built.type === SLACK_NODE_TYPE) {
+      const normalized = normalizeSlackNode(built.parameters);
+      if (normalized) {
+        built.parameters = normalized.parameters;
+        built.typeVersion = normalized.version ?? built.typeVersion;
+      }
+    }
+    if (built.type === DISCORD_NODE_TYPE) {
+      const normalized = normalizeDiscordNode(built.parameters);
+      if (normalized) {
+        built.parameters = normalized.parameters;
+      }
+    }
+    if (built.type === SMTP_NODE_TYPE) {
+      const normalized = normalizeSmtpNode(built.parameters);
+      if (normalized) {
+        built.parameters = normalized.parameters;
+      }
+    }    // AI models invent credential ids (e.g. YOUR_CREDENTIAL_ID); real
+    // credentials are injected later from the user's linked apps.
+    delete (built as any).credentials;
     return built;
   });
 
@@ -298,21 +497,133 @@ export async function runPipeline(userId: number, prompt: string): Promise<Pipel
   const generateStart = Date.now();
   let clean: CleanWorkflow;
   try {
-    const genPrompt = `${prompt}\n\nIMPORTANT: the entry point must be a Webhook trigger node (type "n8n-nodes-base.webhook", typeVersion 2) so the workflow can be executed via its webhook URL. Keep the workflow small (2 to 5 nodes).`;
-    const res = await callGemini(SYSTEM_PROMPTS.generateWorkflow, genPrompt);
-    const parsed = extractJson(res.text);
-    clean = sanitizeWorkflow(parsed, prompt);
+    const baseGenPrompt = `${prompt}\n\nIMPORTANT: the entry point must be a Webhook trigger node (type "n8n-nodes-base.webhook", typeVersion 2) so the workflow can be executed via its webhook URL. Keep the workflow small (2 to 5 nodes).`;
+    let lastGenError: unknown;
+    let generated: { clean: CleanWorkflow; res: AIResponse } | undefined;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      // A malformed reply is retried instead of failing the whole build.
+      const strict = attempt > 0 ? '\nRespond with strictly valid JSON only: double quotes around every key and string, no trailing commas, no comments.' : '';
+      try {
+        const reply = await callGemini(SYSTEM_PROMPTS.generateWorkflow, baseGenPrompt + strict);
+        generated = { clean: sanitizeWorkflow(extractJson(reply.text), prompt), res: reply };
+        break;
+      } catch (err) {
+        lastGenError = err;
+      }
+    }
+    if (!generated) throw lastGenError;
+    clean = generated.clean;
     stages.push({
       stage: 'generate',
       ok: true,
       ms: Date.now() - generateStart,
-      detail: { model: res.model, name: clean.name, nodes: clean.nodes.length },
+      detail: { model: generated.res.model, name: clean.name, nodes: clean.nodes.length },
     });
   } catch (err) {
     stages.push({ stage: 'generate', ok: false, ms: Date.now() - generateStart, error: msg(err) });
     throw new PipelineError('generate', `Workflow generation failed: ${msg(err)}`, 502, stages);
   }
 
+  const credentialsStart = Date.now();
+  let definitionNodes: N8nNode[] = [];
+  try {
+    const required = detectRequiredCredentials(clean.nodes);
+    const linked = await listUserCredentials(userId);
+    const linkedMap = linkedCredentialsMap(linked);
+    const skipped = new Set(options.skipApps ?? []);
+
+    const usedSkipped = required.filter((spec) => skipped.has(spec.app));
+    if (usedSkipped.length > 0) {
+      const labels = usedSkipped.map((spec) => spec.label).join(', ');
+      stages.push({
+        stage: 'credentials',
+        ok: false,
+        ms: Date.now() - credentialsStart,
+        error: `Workflow needs ${labels}, but the app was skipped`,
+      });
+      throw new PipelineError(
+        'credentials',
+        `This workflow needs ${labels}, which you chose to skip. Generate a workflow without ${labels}.`,
+        422,
+        stages,
+        { skippedApps: usedSkipped.map((spec) => spec.app) }
+      );
+    }
+
+    const missing = missingCredentials(required, linked);
+    if (missing.length > 0) {
+      const labels = missing.map((spec) => spec.label).join(', ');
+      stages.push({
+        stage: 'credentials',
+        ok: false,
+        ms: Date.now() - credentialsStart,
+        error: `Credentials required: ${labels}`,
+      });
+      throw new PipelineError(
+        'credentials',
+        `Credentials required before this workflow can run: ${labels}. Add them via POST /api/credentials, link an existing n8n credential, or skip the app.`,
+        409,
+        stages,
+        {
+          needsCredentials: missing.map(toPublicSpec),
+          workflowPreview: {
+            name: clean.name,
+            nodes: clean.nodes,
+            connections: clean.connections,
+          },
+        }
+      );
+    }
+
+    // Keep the stored definition free of injected credential ids.
+    definitionNodes = JSON.parse(JSON.stringify(clean.nodes)) as N8nNode[];
+    injectCredentials(clean.nodes, linkedMap);
+
+    // Discord: convert discord nodes to HTTP Request using the webhook URL
+    // stored in credential_name (set at credential-creation time).
+    const discordCred = linked.find((c) => c.app === 'discord');
+    if (discordCred) {
+      const webhookUri = discordCred.credential_name;
+      if (webhookUri && webhookUri.startsWith('https://discord.com/api/webhooks/')) {
+        for (const node of clean.nodes) {
+          if (node.type === DISCORD_NODE_TYPE) {
+            const content = (node.parameters as any)?.content
+              || (node.parameters as any)?.text
+              || (node.parameters as any)?.message
+              || (node.parameters as any)?.body?.content
+              || 'Message from n8n automation';
+            node.type = 'n8n-nodes-base.httpRequest';
+            node.typeVersion = 4.2;
+            node.parameters = {
+              method: 'POST',
+              url: webhookUri,
+              sendHeaders: true,
+              headerParameters: { parameters: [{ name: 'Content-Type', value: 'application/json' }] },
+              sendBody: true,
+              specifyBody: 'json',
+              jsonBody: JSON.stringify({ content }),
+              options: {},
+            };
+            delete (node as any).credentials;
+          }
+        }
+      }
+    }
+
+    stages.push({
+      stage: 'credentials',
+      ok: true,
+      ms: Date.now() - credentialsStart,
+      detail: {
+        required: required.map((spec) => spec.app),
+        linked: required.map((spec) => spec.app),
+      },
+    });
+  } catch (err) {
+    if (err instanceof PipelineError) throw err;
+    stages.push({ stage: 'credentials', ok: false, ms: Date.now() - credentialsStart, error: msg(err) });
+    throw new PipelineError('credentials', `Credential setup failed: ${msg(err)}`, 500, stages);
+  }
   const validateStart = Date.now();
   let validation: unknown = null;
   try {
