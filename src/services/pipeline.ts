@@ -3,11 +3,19 @@ import type { ResultSetHeader } from 'mysql2';
 import { callGemini, SYSTEM_PROMPTS, type AIResponse } from './gemini.js';
 import * as n8n from './n8n.js';
 import { N8nError, type N8nExecution, type N8nNode, type N8nWorkflow } from './n8n.js';
+import { listUserCredentials } from '../models/UserCredential.js';
+import {
+  detectRequiredCredentials,
+  missingCredentials,
+  linkedCredentialsMap,
+  injectCredentials,
+  toPublicSpec,
+} from './credentials.js';
 import { pool } from '../config/db.js';
 import { config } from '../config/env.js';
 
 export interface StageReport {
-  stage: 'generate' | 'validate' | 'audit' | 'deploy' | 'execute';
+  stage: 'generate' | 'validate' | 'audit' | 'deploy' | 'execute' | 'credentials';
   ok: boolean;
   ms: number;
   error?: string;
@@ -38,13 +46,15 @@ export class PipelineError extends Error {
   stage: string;
   status: number;
   stages: StageReport[];
+  detail?: any;
 
-  constructor(stage: string, message: string, status: number, stages: StageReport[]) {
+  constructor(stage: string, message: string, status: number, stages: StageReport[], detail?: any) {
     super(message);
     this.name = 'PipelineError';
     this.stage = stage;
     this.status = status;
     this.stages = stages;
+    this.detail = detail;
   }
 }
 
@@ -490,7 +500,11 @@ async function analyzeError(workflowName: string, prompt: string, errorText: str
   }
 }
 
-export async function runPipeline(userId: number, prompt: string): Promise<PipelineResult> {
+export async function runPipeline(
+  userId: number,
+  prompt: string,
+  options: { skipApps?: string[] } = {}
+): Promise<PipelineResult> {
   const stages: StageReport[] = [];
   const overallStart = Date.now();
 

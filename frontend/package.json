@@ -1,0 +1,24 @@
+{
+  "name": "n8n-mini-learn",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "description": "n8n Mini – Learn n8n Easily. A mobile-first, AI-powered companion app for learning n8n, automation, and AI agents.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "lucide-react": "^0.383.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.0",
+    "tailwindcss": "^3.4.10",
+    "postcss": "^8.4.41",
+    "autoprefixer": "^10.4.20"
+  }
+}
