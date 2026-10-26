@@ -11,6 +11,7 @@ import n8nRoutes from './routes/n8n.js';
 import workflowRoutes from './routes/workflows.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import credentialRoutes from './routes/credentials.js';
+import chatRoutes from './routes/chat.js';
 
 process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
@@ -30,6 +31,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api', healthRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/chat', chatRoutes);
 app.use('/api/n8n', n8nRoutes);
 app.use('/api/workflows', workflowRoutes);
 app.use('/api/credentials', credentialRoutes);
