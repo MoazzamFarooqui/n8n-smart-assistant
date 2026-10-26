@@ -1,0 +1,11 @@
+node_modules
+dist
+frontend
+.git
+.env
+*.log
+coverage
+agent-transcripts
+local-notes
+mysql_data
+DockerFile.txt
