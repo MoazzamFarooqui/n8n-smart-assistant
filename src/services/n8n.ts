@@ -349,7 +349,7 @@ export async function executeViaWebhook(
     throw new N8nError(`Webhook node "${node.name}" has no "path" parameter.`, 400);
   }
 
-  const webhookUrl = `${config.n8n.publicUrl}/webhook/${path.replace(/^\/+/, '')}`;
+  const webhookUrl = `${config.n8n.internalUrl}/webhook/${path.replace(/^\/+/, '')}`;
   const method = String(node.parameters?.httpMethod || 'POST').toUpperCase();
   const payload = options.payload ?? {};
   const sendsBody = method === 'POST' || method === 'PUT' || method === 'PATCH';
