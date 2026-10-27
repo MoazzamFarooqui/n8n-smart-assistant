@@ -7,9 +7,8 @@ import { workflowApi, friendlyError } from "../services/api";
 import { fmtMs, statusColor, toPrettyText, safeUrl } from "../utils/format";
 
 const EXAMPLES = [
-  "Send a Slack message when a Google Form is submitted",
-  "Every morning at 9am, email me a summary of my Google Sheet",
-  "When a webhook receives an order, save it to Google Sheets and notify me on Slack",
+  "Send the message \"Hi, how are you?\" to the Slack channel #new-channel.",
+  "When the webhook is triggered, send an email through Gmail to 'youremailid' with the subject \"Automation Alert\" and the body \"Your automation workflow is running successfully!\""
 ];
 
 const STAGE_LABEL = { generate: "Generate", validate: "Validate", audit: "Security audit", deploy: "Deploy to n8n", execute: "Execute" };
