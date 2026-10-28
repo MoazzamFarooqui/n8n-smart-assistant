@@ -315,6 +315,137 @@ function normalizeSlackNode(parameters: any): { parameters: any; version?: numbe
   return { parameters: out, version: SLACK_NODE_VERSION };
 }
 
+function extractSlackMessageText(parameters: any): string {
+  const p = parameters ?? {};
+
+  if (typeof p.jsonBody === 'string' && p.jsonBody.trim()) {
+    try {
+      const parsed = JSON.parse(p.jsonBody);
+      for (const key of ['text', 'content', 'message']) {
+        const candidate = parsed?.[key];
+        if (typeof candidate === 'string' && candidate.trim()) return candidate;
+      }
+    } catch {
+      // not JSON — fall through
+    }
+  }
+
+  const bodyParams = p.bodyParameters?.parameters;
+  if (Array.isArray(bodyParams)) {
+    for (const key of ['text', 'content', 'message']) {
+      const hit = bodyParams.find((x: any) => String(x?.name ?? '').toLowerCase() === key);
+      if (hit && typeof hit.value === 'string' && hit.value.trim()) return hit.value;
+    }
+  }
+
+  for (const candidate of [p.body?.text, p.body?.content, p.text, p.content, p.message]) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate;
+  }
+
+  return 'Message from n8n automation';
+}
+
+function extractSlackChannel(prompt: string, parameters: any): string {
+  const fromParams = parameters?.channelId?.value ?? parameters?.channel;
+  if (typeof fromParams === 'string' && fromParams.trim()) {
+    const value = fromParams.trim();
+    return value.startsWith('#') ? value : `#${value}`;
+  }
+  const match = /#([a-z0-9][a-z0-9_-]{1,})/i.exec(String(prompt ?? ''));
+  if (match) return `#${match[1]}`;
+  return '#general';
+}
+
+/**
+ * Models sometimes answer a Slack request with an HTTP Request node pointing at
+ * the literal placeholder "SLACK_WEBHOOK_URL". That URL can never work: the user
+ * has a Slack app credential (bot token), not an incoming webhook. Rewrite such
+ * nodes into a real Slack node so the connected credential is used instead.
+ */
+function normalizeSlackHttpRequest(node: N8nNode, prompt: string): void {
+  const url = String((node.parameters as any)?.url ?? '');
+  if (!/SLACK_WEBHOOK/i.test(url)) return;
+
+  const text = extractSlackMessageText(node.parameters);
+  const channel = extractSlackChannel(prompt, node.parameters);
+
+  node.type = SLACK_NODE_TYPE;
+  node.typeVersion = SLACK_NODE_VERSION;
+  node.parameters = {
+    resource: 'message',
+    operation: 'post',
+    select: 'channel',
+    channelId: { __rl: true, mode: 'name', value: channel },
+    messageType: 'text',
+    text,
+    otherOptions: {},
+  };
+  delete (node as any).credentials;
+}
+
+const GMAIL_NODE_TYPE = 'n8n-nodes-base.gmail';
+const GMAIL_NODE_VERSION = 2.2;
+
+function normalizeGmailNode(node: N8nNode): void {
+  const p = (node.parameters ?? {}) as any;
+  const resource = typeof p.resource === 'string' ? p.resource : 'message';
+  const operation = typeof p.operation === 'string' ? p.operation : 'send';
+  const out: any = { ...p, resource, operation };
+
+  if (resource === 'message' && operation === 'send') {
+    if (!out.sendTo) out.sendTo = out.to ?? out.toEmail ?? out.recipient ?? out.email;
+    if (!out.subject) out.subject = out.title ?? 'Message from n8n';
+    if (!out.message) out.message = out.text ?? out.body ?? out.content ?? out.html ?? out.emailBody;
+    if (!out.options || typeof out.options !== 'object') out.options = {};
+    if (!out.options.emailType) out.options.emailType = 'text';
+
+    delete out.to;
+    delete out.toEmail;
+    delete out.recipient;
+    delete out.email;
+    delete out.title;
+    delete out.text;
+    delete out.body;
+    delete out.content;
+    delete out.html;
+    delete out.emailBody;
+  }
+
+  node.parameters = out;
+  if (typeof node.typeVersion !== 'number' || node.typeVersion < GMAIL_NODE_VERSION) {
+    node.typeVersion = GMAIL_NODE_VERSION;
+  }
+}
+
+const EMAIL_SEND_NODE_VERSION = 2.1;
+
+function extractDiscordContent(parameters: any): string {
+  const p = parameters ?? {};
+
+  if (typeof p.jsonBody === 'string' && p.jsonBody.trim()) {
+    try {
+      const parsed = JSON.parse(p.jsonBody);
+      if (parsed && typeof parsed === 'object' && typeof parsed.content === 'string' && parsed.content.trim()) {
+        return parsed.content;
+      }
+    } catch {
+      // not JSON — fall through to the other shapes
+    }
+  }
+
+  const bodyParams = p.bodyParameters?.parameters;
+  if (Array.isArray(bodyParams)) {
+    const hit = bodyParams.find((x: any) => String(x?.name ?? '').toLowerCase() === 'content');
+    if (hit && typeof hit.value === 'string' && hit.value.trim()) return hit.value;
+  }
+
+  for (const candidate of [p.body?.content, p.content, p.text, p.message]) {
+    if (typeof candidate === 'string' && candidate.trim()) return candidate;
+  }
+
+  return 'Message from n8n automation';
+}
+
 const DISCORD_NODE_TYPE = 'n8n-nodes-base.discord';
 
 function normalizeDiscordNode(parameters: any, webhookUri?: string): { parameters: any; convertToHttp?: boolean; httpParameters?: any } | undefined {
@@ -341,6 +472,68 @@ function normalizeDiscordNode(parameters: any, webhookUri?: string): { parameter
   if (!out.operation) out.operation = 'message';
   if (!out.resource) out.resource = 'webhook';
   return { parameters: out };
+}
+
+
+const GOOGLE_SHEETS_NODE_TYPE = 'n8n-nodes-base.googleSheets';
+
+/**
+ * n8n's Google Sheets node is strict about its resource locators and column
+ * mapping. Generated nodes regularly arrive with a sheet title in "list" mode
+ * (which n8n resolves as a gid, so the sheet is never found) or with
+ * `columns.value` but no `columns.schema` (which n8n rejects outright).
+ * Repair both shapes here.
+ */
+function normalizeGoogleSheetsNode(node: N8nNode): void {
+  const params = node.parameters as any;
+  if (!params || typeof params !== 'object') return;
+
+  // A sheet title cannot be resolved in "list" or "id" mode; only "name" works.
+  const sheetName = params.sheetName;
+  if (sheetName && typeof sheetName === 'object' && sheetName.__rl) {
+    const value = String(sheetName.value ?? '').trim();
+    const numeric = /^[0-9]+$/.test(value) || /^gid=[0-9]+$/.test(value);
+    if (value && !numeric && sheetName.mode !== 'name') {
+      sheetName.mode = 'name';
+    }
+  }
+
+  // `columns.schema` is mandatory when mappingMode is defineBelow.
+  const columns = params.columns;
+  if (!columns || typeof columns !== 'object') {
+    // Nothing to repair from: let n8n map incoming fields to columns by name
+    // instead of failing with "columns.schema is required".
+    params.columns = { mappingMode: 'autoMapInputData', value: {}, matchingColumns: [], schema: [] };
+    return;
+  }
+  if ((columns.mappingMode ?? 'defineBelow') !== 'defineBelow') return;
+
+  const value = columns.value && typeof columns.value === 'object' ? columns.value : {};
+  if (Object.keys(value).length === 0 && !Array.isArray(columns.schema)) {
+    columns.mappingMode = 'autoMapInputData';
+    columns.value = {};
+    columns.schema = [];
+    if (!Array.isArray(columns.matchingColumns)) columns.matchingColumns = [];
+    return;
+  }
+  const schema: any[] = Array.isArray(columns.schema) ? columns.schema : [];
+  const known = new Set(schema.map((entry) => String(entry?.id ?? '')));
+  for (const key of Object.keys(value)) {
+    if (known.has(key)) continue;
+    schema.push({
+      id: key,
+      displayName: key,
+      required: false,
+      defaultMatch: false,
+      canBeUsedToMatch: true,
+      type: 'string',
+      removed: false,
+    });
+    known.add(key);
+  }
+  columns.schema = schema;
+  columns.mappingMode = 'defineBelow';
+  if (!Array.isArray(columns.matchingColumns)) columns.matchingColumns = [];
 }
 
 
@@ -386,11 +579,23 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
         built.parameters = normalized.parameters;
       }
     }
+    if (built.type === 'n8n-nodes-base.httpRequest') {
+      normalizeSlackHttpRequest(built, prompt);
+    }
     if (built.type === SMTP_NODE_TYPE) {
       const normalized = normalizeSmtpNode(built.parameters);
       if (normalized) {
         built.parameters = normalized.parameters;
       }
+      if (typeof built.typeVersion !== 'number' || built.typeVersion < EMAIL_SEND_NODE_VERSION) {
+        built.typeVersion = EMAIL_SEND_NODE_VERSION;
+      }
+    }
+    if (built.type === GMAIL_NODE_TYPE) {
+      normalizeGmailNode(built);
+    }
+    if (built.type === GOOGLE_SHEETS_NODE_TYPE) {
+      normalizeGoogleSheetsNode(built);
     }    // AI models invent credential ids (e.g. YOUR_CREDENTIAL_ID); real
     // credentials are injected later from the user's linked apps.
     delete (built as any).credentials;
@@ -619,6 +824,25 @@ export async function runPipeline(
               options: {},
             };
             delete (node as any).credentials;
+          } else if (node.type === 'n8n-nodes-base.httpRequest') {
+            // The generator is told to use the DISCORD_WEBHOOK_URL placeholder;
+            // swap it for the real webhook stored with the Discord credential.
+            const url = String((node.parameters as any)?.url ?? '');
+            if (/DISCORD_WEBHOOK/i.test(url)) {
+              const content = extractDiscordContent(node.parameters);
+              node.typeVersion = 4.2;
+              node.parameters = {
+                method: 'POST',
+                url: webhookUri,
+                sendHeaders: true,
+                headerParameters: { parameters: [{ name: 'Content-Type', value: 'application/json' }] },
+                sendBody: true,
+                specifyBody: 'json',
+                jsonBody: JSON.stringify({ content }),
+                options: {},
+              };
+              delete (node as any).credentials;
+            }
           }
         }
       }
