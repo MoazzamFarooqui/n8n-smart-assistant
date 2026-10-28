@@ -140,6 +140,23 @@ Requirements:
 - Do NOT include a "Respond to Webhook" node (n8n-nodes-base.respondToWebhook)
 - Do NOT include Error Trigger nodes
 - For sending Discord messages via webhook, use node type "n8n-nodes-base.httpRequest" with method POST, url set to the Discord webhook URL placeholder "DISCORD_WEBHOOK_URL", and JSON body {"content": "<message text>"}. Do NOT use n8n-nodes-base.discord node type.
+- For Gmail, use node type "n8n-nodes-base.gmail" with typeVersion 2.2 and parameters: resource "message", operation "send", sendTo "<recipient email>", subject "<subject>", message "<body>", options {"emailType": "text"}. Do NOT use httpRequest for Gmail.
+- For sending email over SMTP, use node type "n8n-nodes-base.emailSend" with typeVersion 2.1 and parameters: fromEmail "<sender>", toEmail "<recipient>", subject "<subject>", text "<body>".
+- Google Sheets nodes (n8n-nodes-base.googleSheets) MUST include a complete "columns" parameter. Never omit it. Use this exact shape:
+  "columns": {
+    "mappingMode": "defineBelow",
+    "value": { "<ColumnHeader>": "<value for that column>", ... },
+    "matchingColumns": [],
+    "schema": [
+      { "id": "<ColumnHeader>", "displayName": "<ColumnHeader>", "required": false, "defaultMatch": false, "canBeUsedToMatch": true, "type": "string", "removed": false }
+    ]
+  }
+  Rules for that parameter:
+  * "value" must have one key per column header the user asked for, spelled exactly as the user wrote it (case-sensitive, no extra spaces).
+  * "schema" must contain one entry per key in "value", with "id" and "displayName" equal to that key.
+  * When the user gives literal values (e.g. Name: Ali), put the literal string in "value". When the user references incoming webhook fields, use the n8n expression form "={{ $json.<field> }}".
+  * Set "sheetName" to {"__rl": true, "value": "<gid or tab name>", "mode": "id"} when a numeric gid is given, otherwise mode "name".
+  * Set "documentId" to {"__rl": true, "value": "<spreadsheet id>", "mode": "id"}.
 Return ONLY the JSON, no markdown, no explanation.`,
 
   validateWorkflow: `You are an n8n workflow validator. Check the provided workflow JSON for:
@@ -168,10 +185,22 @@ Be practical and actionable.`,
 Be specific about data types and transformations.`,
 
   securityAudit: `You are an n8n security auditor. Analyze the workflow for:
-1) Hardcoded credentials/secrets
-2) Unsafe HTTP requests (no auth, public endpoints)
-3) Data exposure risks
-4) Injection vulnerabilities (expressions, SQL)
+1) Hardcoded credentials/secrets (API keys, tokens, passwords written in plain text)
+2) Unsafe HTTP requests (sending data to untrusted or unexpected hosts)
+3) Data exposure risks (sensitive data leaving to third parties)
+4) Injection vulnerabilities (expressions, SQL, command injection)
 5) Missing error handling
+
+IMPORTANT — do NOT report any of the following. They are intentional platform behaviour, not risks:
+- Public/unauthenticated Webhook Trigger nodes — this platform exposes demo webhooks on purpose and handles auth at its own gateway
+- Static or sample values inside nodes (names, messages, test data) — these are demo inputs, not leaked secrets
+- Placeholder emails such as test@example.com, no-reply@..., or sample domains
+- Missing error handling, Error Trigger nodes, or "Continue On Fail" settings — the platform has its own error handling layer
+- Credential references or injected credential IDs on nodes — credentials are injected at runtime and are always valid
+- HTTP Request nodes that post to Discord/Slack webhook URLs supplied by the platform
+- Webhook nodes using responseMode "lastNode" or "responseNode"
+- Missing "Respond to Webhook" node — intentionally omitted
+
+Only report genuine risks such as real API keys/tokens/passwords in plain text, injection flaws, or sensitive data being sent to an untrusted third-party host. If nothing genuine exists, return an empty risks array.
 Return: { risks: Array<{severity: 'high'|'medium'|'low', issue: string, fix: string}> }`,
 } as const;
