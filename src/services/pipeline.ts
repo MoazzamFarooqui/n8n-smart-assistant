@@ -476,64 +476,110 @@ function normalizeDiscordNode(parameters: any, webhookUri?: string): { parameter
 
 
 const GOOGLE_SHEETS_NODE_TYPE = 'n8n-nodes-base.googleSheets';
+const GOOGLE_SHEETS_NODE_VERSION = 4.5;
+
+function extractSheetId(prompt: string): string | undefined {
+  const url = /spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/.exec(prompt);
+  if (url) return url[1];
+  const labeled = /spreadsheet\s*id[^A-Za-z0-9_-]*([a-zA-Z0-9_-]{20,})/i.exec(prompt);
+  return labeled?.[1];
+}
+
+function extractSheetGid(prompt: string): string | undefined {
+  const m = /gid\s*[=:]?\s*[`'"]?(\d+)/i.exec(prompt);
+  return m?.[1];
+}
+
+// Pulls "Label: value" lines (bulleted or not) out of the prompt.
+// Markdown links like [a@b.com](mailto:a@b.com) become plain text.
+function extractColumnValues(prompt: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const text = String(prompt ?? '').replace(/\[([^\]]+)\]\((?:mailto:|https?:)[^)]*\)/gi, '$1');
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^\s*(?:[*\-•]\s*)?\**([A-Za-z][A-Za-z0-9 _]{0,29}?)\**\s*:\s*(.+?)\s*$/.exec(line);
+    if (!m) continue;
+    const key = m[1].trim();
+    const value = m[2].trim().replace(/^[`'"]|[`'"]$/g, '');
+    if (!value || /^https?$/i.test(key) || key.split(/\s+/).length > 3) continue;
+    out[key] = value;
+  }
+  return out;
+}
 
 /**
- * n8n's Google Sheets node is strict about its resource locators and column
- * mapping. Generated nodes regularly arrive with a sheet title in "list" mode
- * (which n8n resolves as a gid, so the sheet is never found) or with
- * `columns.value` but no `columns.schema` (which n8n rejects outright).
- * Repair both shapes here.
+ * Builds a valid Google Sheets node. The spreadsheet ID, sheet GID and column
+ * values are taken from the user's prompt first, so they never depend on what
+ * the model happened to generate.
  */
-function normalizeGoogleSheetsNode(node: N8nNode): void {
-  const params = node.parameters as any;
-  if (!params || typeof params !== 'object') return;
+function normalizeGoogleSheetsNode(node: N8nNode, prompt: string): void {
+  const p = (node.parameters ?? {}) as any;
+  const operation = ['append', 'appendOrUpdate', 'update'].includes(p.operation) ? p.operation : 'append';
 
-  // A sheet title cannot be resolved in "list" or "id" mode; only "name" works.
-  const sheetName = params.sheetName;
-  if (sheetName && typeof sheetName === 'object' && sheetName.__rl) {
-    const value = String(sheetName.value ?? '').trim();
-    const numeric = /^[0-9]+$/.test(value) || /^gid=[0-9]+$/.test(value);
-    if (value && !numeric && sheetName.mode !== 'name') {
-      sheetName.mode = 'name';
-    }
+  // Document: ID from the prompt, else whatever the model gave (string, URL or locator).
+  const modelDoc = typeof p.documentId === 'string' ? p.documentId : p.documentId?.value;
+  const modelDocStr = String(modelDoc ?? '');
+  const modelDocId =
+    /spreadsheets\/d\/([a-zA-Z0-9_-]+)/.exec(modelDocStr)?.[1] ??
+    (/^[a-zA-Z0-9_-]{20,}$/.test(modelDocStr) ? modelDocStr : undefined);
+  const docId = extractSheetId(prompt) ?? modelDocId;
+  if (!docId) {
+    throw new Error('Google Sheets node has no spreadsheet ID; include the sheet URL or ID in the prompt');
   }
 
-  // `columns.schema` is mandatory when mappingMode is defineBelow.
-  const columns = params.columns;
-  if (!columns || typeof columns !== 'object') {
-    // Nothing to repair from: let n8n map incoming fields to columns by name
-    // instead of failing with "columns.schema is required".
-    params.columns = { mappingMode: 'autoMapInputData', value: {}, matchingColumns: [], schema: [] };
-    return;
+  // Sheet: a GID only works in "id" mode, a tab title only in "name" mode.
+  const modelSheet = typeof p.sheetName === 'string' ? p.sheetName : p.sheetName?.value;
+  const modelSheetStr = String(modelSheet ?? '').trim();
+  const promptGid = extractSheetGid(prompt);
+  let sheetLocator: { __rl: true; mode: string; value: string };
+  if (promptGid !== undefined) {
+    sheetLocator = { __rl: true, mode: 'id', value: promptGid };
+  } else if (/^(gid=)?\d+$/.test(modelSheetStr)) {
+    sheetLocator = { __rl: true, mode: 'id', value: modelSheetStr.replace(/^gid=/, '') };
+  } else if (modelSheetStr) {
+    sheetLocator = { __rl: true, mode: 'name', value: modelSheetStr };
+  } else {
+    sheetLocator = { __rl: true, mode: 'id', value: '0' };
   }
-  if ((columns.mappingMode ?? 'defineBelow') !== 'defineBelow') return;
 
-  const value = columns.value && typeof columns.value === 'object' ? columns.value : {};
-  if (Object.keys(value).length === 0 && !Array.isArray(columns.schema)) {
-    columns.mappingMode = 'autoMapInputData';
-    columns.value = {};
-    columns.schema = [];
-    if (!Array.isArray(columns.matchingColumns)) columns.matchingColumns = [];
-    return;
+  // Column values: exact values from the prompt override model-invented ones.
+  const values: Record<string, unknown> =
+    p.columns?.value && typeof p.columns.value === 'object' ? { ...p.columns.value } : {};
+  for (const [k, v] of Object.entries(extractColumnValues(prompt))) {
+    const existing = Object.keys(values).find((x) => x.toLowerCase() === k.toLowerCase());
+    values[existing ?? k] = v;
   }
-  const schema: any[] = Array.isArray(columns.schema) ? columns.schema : [];
-  const known = new Set(schema.map((entry) => String(entry?.id ?? '')));
-  for (const key of Object.keys(value)) {
-    if (known.has(key)) continue;
-    schema.push({
-      id: key,
-      displayName: key,
-      required: false,
-      defaultMatch: false,
-      canBeUsedToMatch: true,
-      type: 'string',
-      removed: false,
-    });
-    known.add(key);
+  for (const [k, v] of Object.entries(values)) {
+    if (v === undefined || v === null || v === '' || /YOUR_|PLACEHOLDER/i.test(String(v))) delete values[k];
   }
-  columns.schema = schema;
-  columns.mappingMode = 'defineBelow';
-  if (!Array.isArray(columns.matchingColumns)) columns.matchingColumns = [];
+
+  const columns: any =
+    Object.keys(values).length > 0
+      ? {
+          mappingMode: 'defineBelow',
+          value: values,
+          matchingColumns: operation === 'append' ? [] : (p.columns?.matchingColumns ?? []),
+          schema: Object.keys(values).map((id) => ({
+            id,
+            displayName: id,
+            required: false,
+            defaultMatch: false,
+            display: true,
+            canBeUsedToMatch: true,
+            type: 'string',
+            removed: false,
+          })),
+        }
+      : { mappingMode: 'autoMapInputData', value: {}, matchingColumns: [], schema: [] };
+
+  node.typeVersion = GOOGLE_SHEETS_NODE_VERSION;
+  node.parameters = {
+    resource: 'sheet',
+    operation,
+    documentId: { __rl: true, mode: 'id', value: docId },
+    sheetName: sheetLocator,
+    columns,
+    options: p.options && typeof p.options === 'object' ? p.options : {},
+  };
 }
 
 
@@ -595,8 +641,9 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
       normalizeGmailNode(built);
     }
     if (built.type === GOOGLE_SHEETS_NODE_TYPE) {
-      normalizeGoogleSheetsNode(built);
-    }    // AI models invent credential ids (e.g. YOUR_CREDENTIAL_ID); real
+      normalizeGoogleSheetsNode(built, prompt);
+    }
+    // AI models invent credential ids (e.g. YOUR_CREDENTIAL_ID); real
     // credentials are injected later from the user's linked apps.
     delete (built as any).credentials;
     return built;
