@@ -41,6 +41,34 @@ function appIcon(app) {
         </svg>
       ),
     },
+    googleCalendar: {
+      bg: "linear-gradient(135deg, #4285F4 0%, #1a56c4 100%)",
+      svg: (
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="3" y="5" width="18" height="16" rx="2.5" stroke="white" strokeWidth="1.8" />
+          <path d="M3 10h18M8 3v4M16 3v4" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
+          <rect x="7" y="13" width="3" height="3" rx="0.6" fill="white" />
+        </svg>
+      ),
+    },
+    googleDrive: {
+      bg: "linear-gradient(135deg, #FBBC05 0%, #34A853 100%)",
+      svg: (
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M8 3h8l5 9-4 7H7l-4-7z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M8 3l5 9h8M3 12h10l4 7" stroke="white" strokeWidth="1.4" strokeLinejoin="round" />
+        </svg>
+      ),
+    },
+    googleDocs: {
+      bg: "linear-gradient(135deg, #4285F4 0%, #2a6fdb 100%)",
+      svg: (
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 3h8l4 4v14H6z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+          <path d="M14 3v4h4M9 12h6M9 15h6M9 18h4" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      ),
+    },
     discord: {
       bg: "linear-gradient(135deg, #7289DA 0%, #5865F2 100%)",
       svg: (

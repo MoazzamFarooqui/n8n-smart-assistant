@@ -101,6 +101,36 @@ export const CREDENTIAL_SPECS: CredentialSpec[] = [
     fields: [],
     hint: 'Tap "Connect Google" on the Credentials page and sign in with your Google account. It takes a few seconds.',
   },
+  {
+    app: 'googleCalendar',
+    label: 'Google Calendar',
+    type: 'googleCalendarOAuth2Api',
+    nodeTypes: ['n8n-nodes-base.googleCalendar', 'n8n-nodes-base.googleCalendarTrigger'],
+    creatable: false,
+    googleOAuth: true,
+    fields: [],
+    hint: 'Tap "Connect Google" once. It links Google Calendar, Drive and Docs together.',
+  },
+  {
+    app: 'googleDrive',
+    label: 'Google Drive',
+    type: 'googleDriveOAuth2Api',
+    nodeTypes: ['n8n-nodes-base.googleDrive', 'n8n-nodes-base.googleDriveTrigger'],
+    creatable: false,
+    googleOAuth: true,
+    fields: [],
+    hint: 'Tap "Connect Google" once. It links Google Calendar, Drive and Docs together.',
+  },
+  {
+    app: 'googleDocs',
+    label: 'Google Docs',
+    type: 'googleDocsOAuth2Api',
+    nodeTypes: ['n8n-nodes-base.googleDocs'],
+    creatable: false,
+    googleOAuth: true,
+    fields: [],
+    hint: 'Tap "Connect Google" once. It links Google Calendar, Drive and Docs together.',
+  },
 ];
 
 export const CREDENTIAL_APPS = CREDENTIAL_SPECS.map((s) => s.app);

@@ -583,6 +583,225 @@ function normalizeGoogleSheetsNode(node: N8nNode, prompt: string): void {
 }
 
 
+function firstString(...values: unknown[]): string | undefined {
+  for (const v of values) {
+    if (typeof v === 'string' && v.trim() !== '') return v;
+  }
+  return undefined;
+}
+
+const GOOGLE_CALENDAR_NODE_TYPE = 'n8n-nodes-base.googleCalendar';
+const GOOGLE_CALENDAR_NODE_VERSION = 1.3;
+const CALENDAR_EVENT_OPERATIONS = ['create', 'getAll', 'get', 'update', 'delete'];
+
+/**
+ * The Calendar node's "id" mode only accepts e-mail style IDs (it validates and
+ * extracts with a regex), so the literal "primary" calendar must use "list" mode,
+ * where the value is passed to Google untouched.
+ */
+function toCalendarLocator(raw: unknown): { __rl: true; mode: string; value: string; cachedResultName?: string } {
+  const text = typeof raw === 'string' ? raw : (raw as any)?.value;
+  const value = String(text ?? '').trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { __rl: true, mode: 'id', value };
+  return { __rl: true, mode: 'list', value: 'primary', cachedResultName: 'primary' };
+}
+
+function normalizeGoogleCalendarNode(node: N8nNode): void {
+  const p = (node.parameters ?? {}) as any;
+  const wantsAvailability = p.resource === 'calendar' || p.operation === 'availability';
+  const calendar = toCalendarLocator(p.calendar ?? p.calendarId);
+
+  if (wantsAvailability) {
+    node.parameters = {
+      resource: 'calendar',
+      operation: 'availability',
+      calendar,
+      timeMin: firstString(p.timeMin, p.start) ?? '={{ $now.toISO() }}',
+      timeMax: firstString(p.timeMax, p.end) ?? "={{ $now.plus({ hours: 1 }).toISO() }}",
+      options: p.options && typeof p.options === 'object' ? p.options : {},
+    };
+    node.typeVersion = GOOGLE_CALENDAR_NODE_VERSION;
+    return;
+  }
+
+  const operation = CALENDAR_EVENT_OPERATIONS.includes(p.operation) ? p.operation : 'create';
+  const out: any = { ...p, resource: 'event', operation, calendar };
+  delete out.calendarId;
+
+  if (operation === 'create') {
+    const extra: any = out.additionalFields && typeof out.additionalFields === 'object' ? { ...out.additionalFields } : {};
+    for (const key of ['summary', 'description', 'location']) {
+      if (out[key] !== undefined) {
+        if (extra[key] === undefined) extra[key] = out[key];
+        delete out[key];
+      }
+    }
+    if (out.title !== undefined) {
+      if (extra.summary === undefined) extra.summary = out.title;
+      delete out.title;
+    }
+    if (!firstString(extra.summary)) extra.summary = 'Event from n8n';
+    out.additionalFields = extra;
+
+    out.start = firstString(out.start, out.startTime, out.startDateTime) ?? "={{ $now.plus({ hours: 1 }).toISO() }}";
+    out.end = firstString(out.end, out.endTime, out.endDateTime) ?? "={{ $now.plus({ hours: 2 }).toISO() }}";
+    delete out.startTime;
+    delete out.startDateTime;
+    delete out.endTime;
+    delete out.endDateTime;
+    if (out.useDefaultReminders === undefined) out.useDefaultReminders = true;
+  }
+
+  if (operation === 'getAll') {
+    const opts: any = out.options && typeof out.options === 'object' ? { ...out.options } : {};
+    // timeMin/timeMax are top-level parameters since node version 1.3.
+    out.timeMin = firstString(out.timeMin, opts.timeMin) ?? "={{ $now.startOf('day').toISO() }}";
+    out.timeMax = firstString(out.timeMax, opts.timeMax) ?? "={{ $now.endOf('day').toISO() }}";
+    delete opts.timeMin;
+    delete opts.timeMax;
+    delete opts.singleEvents;
+    out.options = opts;
+    out.returnAll = out.returnAll === true;
+    if (!out.returnAll) {
+      const limit = Number(out.limit);
+      out.limit = Number.isFinite(limit) && limit > 0 ? limit : 20;
+    }
+  }
+
+  node.parameters = out;
+  node.typeVersion = GOOGLE_CALENDAR_NODE_VERSION;
+}
+
+const GOOGLE_DRIVE_NODE_TYPE = 'n8n-nodes-base.googleDrive';
+const GOOGLE_DRIVE_NODE_VERSION = 3;
+
+function driveDefaultLocator() {
+  return { __rl: true, mode: 'list', value: 'My Drive' };
+}
+
+function toDriveFolderLocator(raw: unknown): { __rl: true; mode: string; value: string; cachedResultName?: string } {
+  const text = typeof raw === 'string' ? raw : (raw as any)?.value;
+  const value = String(text ?? '').trim();
+  const id = /\/folders\/([a-zA-Z0-9_-]+)/.exec(value)?.[1] ?? value;
+  if (!id || id === 'root' || /^(my ?drive|\/)$/i.test(id) || /YOUR_|PLACEHOLDER|<.*>/i.test(id)) {
+    return { __rl: true, mode: 'list', value: 'root', cachedResultName: '/ (Root folder)' };
+  }
+  return { __rl: true, mode: 'id', value: id };
+}
+
+function normalizeGoogleDriveNode(node: N8nNode): void {
+  const p = (node.parameters ?? {}) as any;
+  const resource = String(p.resource ?? '');
+  const operation = String(p.operation ?? '');
+  const hasContent = firstString(p.content, p.text, p.body, p.message) !== undefined;
+
+  node.typeVersion = GOOGLE_DRIVE_NODE_VERSION;
+
+  if (resource === 'fileFolder' || ['search', 'list', 'getAll'].includes(operation)) {
+    const limit = Number(p.limit);
+    node.parameters = {
+      resource: 'fileFolder',
+      operation: 'search',
+      searchMethod: 'name',
+      queryString: firstString(p.queryString, p.query, p.name, p.searchTerm) ?? '',
+      returnAll: p.returnAll === true,
+      limit: Number.isFinite(limit) && limit > 0 ? limit : 20,
+      filter: {},
+      options: {},
+    };
+    return;
+  }
+
+  if (resource === 'folder' && (operation === 'create' || operation === '')) {
+    node.parameters = {
+      resource: 'folder',
+      operation: 'create',
+      name: firstString(p.name, p.folderName, p.title) ?? 'New folder',
+      driveId: driveDefaultLocator(),
+      folderId: toDriveFolderLocator(p.folderId ?? p.parentFolderId ?? p.parent),
+      options: {},
+    };
+    return;
+  }
+
+  const isFileCreate =
+    (resource === 'file' || resource === '') &&
+    (operation === 'createFromText' ||
+      (['create', 'createFile', 'createTextFile', 'upload', ''].includes(operation) && hasContent));
+  if (isFileCreate) {
+    const options: any = {};
+    const convert =
+      p.options?.convertToGoogleDocument ?? p.convertToGoogleDocument ?? p.asGoogleDoc ?? p.convertToDoc;
+    if (convert === true || convert === 'true') options.convertToGoogleDocument = true;
+    node.parameters = {
+      resource: 'file',
+      operation: 'createFromText',
+      name: firstString(p.name, p.fileName, p.filename, p.title) ?? 'n8n-file.txt',
+      content: firstString(p.content, p.text, p.body, p.message) ?? '',
+      driveId: driveDefaultLocator(),
+      folderId: toDriveFolderLocator(p.folderId ?? p.folder ?? p.parentFolderId),
+      options,
+    };
+  }
+  // any other Drive operation is left exactly as generated
+}
+
+const GOOGLE_DOCS_NODE_TYPE = 'n8n-nodes-base.googleDocs';
+const GOOGLE_DOCS_NODE_VERSION = 2;
+
+function normalizeGoogleDocsNode(node: N8nNode): void {
+  const p = (node.parameters ?? {}) as any;
+  const rawOp = String(p.operation ?? '');
+  let operation = 'create';
+  if (['create', 'get', 'update'].includes(rawOp)) operation = rawOp;
+  else if (['append', 'insert', 'write', 'edit', 'updateDocument', 'insertText'].includes(rawOp)) operation = 'update';
+  else if (['read', 'getDocument'].includes(rawOp)) operation = 'get';
+
+  const documentURL = firstString(p.documentURL, p.documentUrl, p.documentId, p.url, p.id) ?? '';
+  node.typeVersion = GOOGLE_DOCS_NODE_VERSION;
+
+  if (operation === 'create') {
+    const folder = firstString(p.folderId);
+    node.parameters = {
+      resource: 'document',
+      operation: 'create',
+      title: firstString(p.title, p.name, p.documentName) ?? 'Untitled document',
+      driveId: 'myDrive',
+      folderId: folder && !/^(default|root)$/i.test(folder) && !/YOUR_|PLACEHOLDER|<.*>/i.test(folder) ? folder : 'default',
+    };
+    return;
+  }
+
+  if (operation === 'get') {
+    node.parameters = { resource: 'document', operation: 'get', documentURL, simple: p.simple !== false };
+    return;
+  }
+
+  // update
+  let fields: any[] = Array.isArray(p.actionsUi?.actionFields) ? p.actionsUi.actionFields : [];
+  const plainText = firstString(p.text, p.content, p.body, p.message);
+  if (fields.length === 0 && plainText !== undefined) fields = [{ text: plainText }];
+  fields = fields.map((f: any) => {
+    const field: any = { ...(f ?? {}) };
+    if (!field.object) field.object = 'text';
+    if (!field.action) field.action = 'insert';
+    if (field.object === 'text' && field.action === 'insert') {
+      if (field.text === undefined) field.text = '';
+      if (!field.insertSegment) field.insertSegment = 'body';
+      if (!field.locationChoice) field.locationChoice = 'endOfSegmentLocation';
+    }
+    return field;
+  });
+  node.parameters = {
+    resource: 'document',
+    operation: 'update',
+    documentURL,
+    simple: p.simple !== false,
+    actionsUi: { actionFields: fields },
+  };
+}
+
+
 function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('AI response was not a JSON workflow object');
@@ -642,6 +861,15 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
     }
     if (built.type === GOOGLE_SHEETS_NODE_TYPE) {
       normalizeGoogleSheetsNode(built, prompt);
+    }
+    if (built.type === GOOGLE_CALENDAR_NODE_TYPE) {
+      normalizeGoogleCalendarNode(built);
+    }
+    if (built.type === GOOGLE_DRIVE_NODE_TYPE) {
+      normalizeGoogleDriveNode(built);
+    }
+    if (built.type === GOOGLE_DOCS_NODE_TYPE) {
+      normalizeGoogleDocsNode(built);
     }
     // AI models invent credential ids (e.g. YOUR_CREDENTIAL_ID); real
     // credentials are injected later from the user's linked apps.

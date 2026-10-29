@@ -9,7 +9,10 @@ import { fmtMs, statusColor, toPrettyText, safeUrl } from "../utils/format";
 const EXAMPLES = [
   "Send the message \"Hi, how are you?\" to the Slack channel #new-channel.",
   "When the webhook is triggered, send an email through Gmail to 'youremailid' with the subject \"Automation Alert\" and the body \"Your automation workflow is running successfully!\"",
-  "When a webhook receives a new entry, add a row to this Google Sheet: [Google Sheets URL]. Use spreadsheet ID your_spreadsheet_id and sheet gid 0. Add a row with these exact values: Name: test_name, Email: test_email, Message: test_message."
+  "When a webhook receives a new entry, add a row to this Google Sheet: [Google Sheets URL]. Use spreadsheet ID your_spreadsheet_id and sheet gid 0. Add a row with these exact values: Name: test_name, Email: test_email, Message: test_message.",
+  "When the webhook is triggered, create a Google Calendar event titled \"Viva Preparation\" for tomorrow at 10:00 AM with the description \"Revise slides and demo\".",
+  "When the webhook is triggered, create a Google Doc titled \"Meeting Notes\" and write \"Agenda: project demo and viva plan\" inside it.",
+  "When the webhook is triggered, create a folder named \"Project Files\" in Google Drive."
 ];
 
 const STAGE_LABEL = { generate: "Generate", validate: "Validate", audit: "Security audit", deploy: "Deploy to n8n", execute: "Execute" };

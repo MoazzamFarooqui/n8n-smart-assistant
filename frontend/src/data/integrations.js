@@ -1,6 +1,6 @@
 import {
   Mail, Phone, Instagram, Facebook, Send, Hash, MessageCircle, Layers,
-  Sparkles, Server, Database,
+  Sparkles, Server, Database, Calendar, FolderOpen, FileText,
 } from "lucide-react";
 
 export const INTEGRATIONS = [
@@ -169,6 +169,62 @@ export const INTEGRATIONS = [
       { title: "Approve access", desc: "A Google popup appears — log in and allow n8n to view and manage your spreadsheets." },
       { title: "Select your file and tab", desc: "Add a Google Sheets node, pick your spreadsheet, then choose the correct sheet tab inside it." },
       { title: "Map your fields", desc: "Choose 'Append Row', match each column to the incoming data, then run it to confirm a new row appears." },
+    ],
+  },
+  {
+    id: "google-calendar", name: "Google Calendar", icon: Calendar, color: "#4285F4",
+    what: "Google Calendar is Google's scheduling app, and workflows can create, list and check events automatically.",
+    why: "It turns bookings, reminders and deadlines into calendar events without any manual typing.",
+    connect: "This app connects with Google's OAuth login, so you never share your password.",
+    credentials: "A Google account, authorized once through a secure sign-in popup (one click links Calendar, Drive and Docs).",
+    params: [
+      { name: "Calendar", desc: "Which calendar to use. The main calendar is used by default." },
+      { name: "Title", desc: "The name of the event." },
+      { name: "Start / End", desc: "When the event begins and ends." },
+      { name: "Description", desc: "Extra notes shown inside the event." },
+    ],
+    steps: [
+      { title: "Open the Credentials page", desc: "In this app, go to Account → Credentials and find Google Calendar, Google Drive or Google Docs." },
+      { title: "Tap Connect Google", desc: "One tap on any of the three opens a Google sign-in popup. It links Calendar, Drive and Docs together in one go." },
+      { title: "Approve access", desc: "Sign in with your Google account and allow access to Calendar, Drive and Docs." },
+      { title: "Describe your automation", desc: "Open the Generator and describe what you want in plain English — the workflow is built and deployed for you." },
+    ],
+  },
+  {
+    id: "google-drive", name: "Google Drive", icon: FolderOpen, color: "#FBBC05",
+    what: "Google Drive is Google's cloud storage, and workflows can create folders, create files and search for them.",
+    why: "It keeps generated files organized automatically instead of saving them by hand.",
+    connect: "This app connects with Google's OAuth login, so you never share your password.",
+    credentials: "A Google account, authorized once through a secure sign-in popup (one click links Calendar, Drive and Docs).",
+    params: [
+      { name: "Name", desc: "The file or folder name." },
+      { name: "Content", desc: "The text stored inside a new file." },
+      { name: "Folder", desc: "Where to save it. Your main Drive folder is used by default." },
+      { name: "Search term", desc: "Part of a file name to look for." },
+    ],
+    steps: [
+      { title: "Open the Credentials page", desc: "In this app, go to Account → Credentials and find Google Calendar, Google Drive or Google Docs." },
+      { title: "Tap Connect Google", desc: "One tap on any of the three opens a Google sign-in popup. It links Calendar, Drive and Docs together in one go." },
+      { title: "Approve access", desc: "Sign in with your Google account and allow access to Calendar, Drive and Docs." },
+      { title: "Describe your automation", desc: "Open the Generator and describe what you want in plain English — the workflow is built and deployed for you." },
+    ],
+  },
+  {
+    id: "google-docs", name: "Google Docs", icon: FileText, color: "#2A6FDB",
+    what: "Google Docs is Google's online word processor, and workflows can create documents, add text and read them.",
+    why: "It generates meeting notes, reports and summaries automatically.",
+    connect: "This app connects with Google's OAuth login, so you never share your password.",
+    credentials: "A Google account, authorized once through a secure sign-in popup (one click links Calendar, Drive and Docs).",
+    params: [
+      { name: "Title", desc: "The name of a new document." },
+      { name: "Document URL or ID", desc: "Which existing document to read or edit." },
+      { name: "Text", desc: "The text added to the end of the document." },
+    ],
+    steps: [
+      { title: "Open the Credentials page", desc: "In this app, go to Account → Credentials and find Google Calendar, Google Drive or Google Docs." },
+      { title: "Tap Connect Google", desc: "One tap on any of the three opens a Google sign-in popup. It links Calendar, Drive and Docs together in one go." },
+      { title: "Approve access", desc: "Sign in with your Google account and allow access to Calendar, Drive and Docs." },
+      { title: "Describe your automation", desc: "Open the Generator and describe what you want in plain English — the workflow is built and deployed for you." },
     ],
   },
   {

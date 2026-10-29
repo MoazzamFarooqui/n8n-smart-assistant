@@ -1,0 +1,505 @@
+diff --git a/frontend/src/data/integrations.js b/frontend/src/data/integrations.js
+index 7068076..bb26c64 100644
+--- a/frontend/src/data/integrations.js
++++ b/frontend/src/data/integrations.js
+@@ -1,6 +1,6 @@
+ import {
+   Mail, Phone, Instagram, Facebook, Send, Hash, MessageCircle, Layers,
+-  Sparkles, Server, Database,
++  Sparkles, Server, Database, Calendar, FolderOpen, FileText,
+ } from "lucide-react";
+ 
+ export const INTEGRATIONS = [
+@@ -171,6 +171,62 @@ export const INTEGRATIONS = [
+       { title: "Map your fields", desc: "Choose 'Append Row', match each column to the incoming data, then run it to confirm a new row appears." },
+     ],
+   },
++  {
++    id: "google-calendar", name: "Google Calendar", icon: Calendar, color: "#4285F4",
++    what: "Google Calendar is Google's scheduling app, and workflows can create, list and check events automatically.",
++    why: "It turns bookings, reminders and deadlines into calendar events without any manual typing.",
++    connect: "This app connects with Google's OAuth login, so you never share your password.",
++    credentials: "A Google account, authorized once through a secure sign-in popup (one click links Calendar, Drive and Docs).",
++    params: [
++      { name: "Calendar", desc: "Which calendar to use. The main calendar is used by default." },
++      { name: "Title", desc: "The name of the event." },
++      { name: "Start / End", desc: "When the event begins and ends." },
++      { name: "Description", desc: "Extra notes shown inside the event." },
++    ],
++    steps: [
++      { title: "Open the Credentials page", desc: "In this app, go to Account → Credentials and find Google Calendar, Google Drive or Google Docs." },
++      { title: "Tap Connect Google", desc: "One tap on any of the three opens a Google sign-in popup. It links Calendar, Drive and Docs together in one go." },
++      { title: "Approve access", desc: "Sign in with your Google account and allow access to Calendar, Drive and Docs." },
++      { title: "Describe your automation", desc: "Open the Generator and describe what you want in plain English — the workflow is built and deployed for you." },
++    ],
++  },
++  {
++    id: "google-drive", name: "Google Drive", icon: FolderOpen, color: "#FBBC05",
++    what: "Google Drive is Google's cloud storage, and workflows can create folders, create files and search for them.",
++    why: "It keeps generated files organized automatically instead of saving them by hand.",
++    connect: "This app connects with Google's OAuth login, so you never share your password.",
++    credentials: "A Google account, authorized once through a secure sign-in popup (one click links Calendar, Drive and Docs).",
++    params: [
++      { name: "Name", desc: "The file or folder name." },
++      { name: "Content", desc: "The text stored inside a new file." },
++      { name: "Folder", desc: "Where to save it. Your main Drive folder is used by default." },
++      { name: "Search term", desc: "Part of a file name to look for." },
++    ],
++    steps: [
++      { title: "Open the Credentials page", desc: "In this app, go to Account → Credentials and find Google Calendar, Google Drive or Google Docs." },
++      { title: "Tap Connect Google", desc: "One tap on any of the three opens a Google sign-in popup. It links Calendar, Drive and Docs together in one go." },
++      { title: "Approve access", desc: "Sign in with your Google account and allow access to Calendar, Drive and Docs." },
++      { title: "Describe your automation", desc: "Open the Generator and describe what you want in plain English — the workflow is built and deployed for you." },
++    ],
++  },
++  {
++    id: "google-docs", name: "Google Docs", icon: FileText, color: "#2A6FDB",
++    what: "Google Docs is Google's online word processor, and workflows can create documents, add text and read them.",
++    why: "It generates meeting notes, reports and summaries automatically.",
++    connect: "This app connects with Google's OAuth login, so you never share your password.",
++    credentials: "A Google account, authorized once through a secure sign-in popup (one click links Calendar, Drive and Docs).",
++    params: [
++      { name: "Title", desc: "The name of a new document." },
++      { name: "Document URL or ID", desc: "Which existing document to read or edit." },
++      { name: "Text", desc: "The text added to the end of the document." },
++    ],
++    steps: [
++      { title: "Open the Credentials page", desc: "In this app, go to Account → Credentials and find Google Calendar, Google Drive or Google Docs." },
++      { title: "Tap Connect Google", desc: "One tap on any of the three opens a Google sign-in popup. It links Calendar, Drive and Docs together in one go." },
++      { title: "Approve access", desc: "Sign in with your Google account and allow access to Calendar, Drive and Docs." },
++      { title: "Describe your automation", desc: "Open the Generator and describe what you want in plain English — the workflow is built and deployed for you." },
++    ],
++  },
+   {
+     id: "openai", name: "OpenAI", icon: Sparkles, color: "#10A37F",
+     what: "OpenAI is the company behind popular AI models like GPT, used for text and image generation.",
+diff --git a/frontend/src/pages/Credentials.jsx b/frontend/src/pages/Credentials.jsx
+index e9b7f9a..ad35917 100644
+--- a/frontend/src/pages/Credentials.jsx
++++ b/frontend/src/pages/Credentials.jsx
+@@ -41,6 +41,34 @@ function appIcon(app) {
+         </svg>
+       ),
+     },
++    googleCalendar: {
++      bg: "linear-gradient(135deg, #4285F4 0%, #1a56c4 100%)",
++      svg: (
++        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
++          <rect x="3" y="5" width="18" height="16" rx="2.5" stroke="white" strokeWidth="1.8" />
++          <path d="M3 10h18M8 3v4M16 3v4" stroke="white" strokeWidth="1.8" strokeLinecap="round" />
++          <rect x="7" y="13" width="3" height="3" rx="0.6" fill="white" />
++        </svg>
++      ),
++    },
++    googleDrive: {
++      bg: "linear-gradient(135deg, #FBBC05 0%, #34A853 100%)",
++      svg: (
++        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
++          <path d="M8 3h8l5 9-4 7H7l-4-7z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
++          <path d="M8 3l5 9h8M3 12h10l4 7" stroke="white" strokeWidth="1.4" strokeLinejoin="round" />
++        </svg>
++      ),
++    },
++    googleDocs: {
++      bg: "linear-gradient(135deg, #4285F4 0%, #2a6fdb 100%)",
++      svg: (
++        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
++          <path d="M6 3h8l4 4v14H6z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
++          <path d="M14 3v4h4M9 12h6M9 15h6M9 18h4" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
++        </svg>
++      ),
++    },
+     discord: {
+       bg: "linear-gradient(135deg, #7289DA 0%, #5865F2 100%)",
+       svg: (
+diff --git a/frontend/src/pages/Generator.jsx b/frontend/src/pages/Generator.jsx
+index f0ae0b7..febb843 100644
+--- a/frontend/src/pages/Generator.jsx
++++ b/frontend/src/pages/Generator.jsx
+@@ -9,7 +9,10 @@ import { fmtMs, statusColor, toPrettyText, safeUrl } from "../utils/format";
+ const EXAMPLES = [
+   "Send the message \"Hi, how are you?\" to the Slack channel #new-channel.",
+   "When the webhook is triggered, send an email through Gmail to 'youremailid' with the subject \"Automation Alert\" and the body \"Your automation workflow is running successfully!\"",
+-  "When a webhook receives a new entry, add a row to this Google Sheet: [Google Sheets URL]. Use spreadsheet ID your_spreadsheet_id and sheet gid 0. Add a row with these exact values: Name: test_name, Email: test_email, Message: test_message."
++  "When a webhook receives a new entry, add a row to this Google Sheet: [Google Sheets URL]. Use spreadsheet ID your_spreadsheet_id and sheet gid 0. Add a row with these exact values: Name: test_name, Email: test_email, Message: test_message.",
++  "When the webhook is triggered, create a Google Calendar event titled \"Viva Preparation\" for tomorrow at 10:00 AM with the description \"Revise slides and demo\".",
++  "When the webhook is triggered, create a Google Doc titled \"Meeting Notes\" and write \"Agenda: project demo and viva plan\" inside it.",
++  "When the webhook is triggered, create a folder named \"Project Files\" in Google Drive."
+ ];
+ 
+ const STAGE_LABEL = { generate: "Generate", validate: "Validate", audit: "Security audit", deploy: "Deploy to n8n", execute: "Execute" };
+diff --git a/src/services/credentials.ts b/src/services/credentials.ts
+index 81dd667..8f45fca 100644
+--- a/src/services/credentials.ts
++++ b/src/services/credentials.ts
+@@ -101,6 +101,36 @@ export const CREDENTIAL_SPECS: CredentialSpec[] = [
+     fields: [],
+     hint: 'Tap "Connect Google" on the Credentials page and sign in with your Google account. It takes a few seconds.',
+   },
++  {
++    app: 'googleCalendar',
++    label: 'Google Calendar',
++    type: 'googleCalendarOAuth2Api',
++    nodeTypes: ['n8n-nodes-base.googleCalendar', 'n8n-nodes-base.googleCalendarTrigger'],
++    creatable: false,
++    googleOAuth: true,
++    fields: [],
++    hint: 'Tap "Connect Google" once. It links Google Calendar, Drive and Docs together.',
++  },
++  {
++    app: 'googleDrive',
++    label: 'Google Drive',
++    type: 'googleDriveOAuth2Api',
++    nodeTypes: ['n8n-nodes-base.googleDrive', 'n8n-nodes-base.googleDriveTrigger'],
++    creatable: false,
++    googleOAuth: true,
++    fields: [],
++    hint: 'Tap "Connect Google" once. It links Google Calendar, Drive and Docs together.',
++  },
++  {
++    app: 'googleDocs',
++    label: 'Google Docs',
++    type: 'googleDocsOAuth2Api',
++    nodeTypes: ['n8n-nodes-base.googleDocs'],
++    creatable: false,
++    googleOAuth: true,
++    fields: [],
++    hint: 'Tap "Connect Google" once. It links Google Calendar, Drive and Docs together.',
++  },
+ ];
+ 
+ export const CREDENTIAL_APPS = CREDENTIAL_SPECS.map((s) => s.app);
+diff --git a/src/services/gemini.ts b/src/services/gemini.ts
+index e4121d1..bf216b2 100644
+--- a/src/services/gemini.ts
++++ b/src/services/gemini.ts
+@@ -141,6 +141,9 @@ Requirements:
+ - Do NOT include Error Trigger nodes
+ - For sending Discord messages via webhook, use node type "n8n-nodes-base.httpRequest" with method POST, url set to the Discord webhook URL placeholder "DISCORD_WEBHOOK_URL", and JSON body {"content": "<message text>"}. Do NOT use n8n-nodes-base.discord node type.
+ - For Gmail, use node type "n8n-nodes-base.gmail" with typeVersion 2.2 and parameters: resource "message", operation "send", sendTo "<recipient email>", subject "<subject>", message "<body>", options {"emailType": "text"}. Do NOT use httpRequest for Gmail.
++- For Google Calendar, use node type "n8n-nodes-base.googleCalendar" with typeVersion 1.3 and set "calendar" to "primary" (or the calendar email if the user gives one). To create an event use resource "event", operation "create", start "={{ $now.plus({ days: 1 }).set({ hour: 10, minute: 0, second: 0 }).toISO() }}" (or the exact ISO date-time the user gave), end the same way one hour later, and additionalFields {"summary": "<title>", "description": "<details>"}. To list events use resource "event", operation "getAll", returnAll false, limit 20, timeMin "={{ $now.startOf('day').toISO() }}" and timeMax "={{ $now.endOf('day').toISO() }}" (timeMin and timeMax are top-level parameters, NOT inside options). To check if a time slot is free use resource "calendar", operation "availability", timeMin and timeMax as ISO date-times. Do NOT use httpRequest for Google Calendar.
++- For Google Drive, use node type "n8n-nodes-base.googleDrive" with typeVersion 3. To create a text file use resource "file", operation "createFromText", name "<file name with extension, e.g. notes.txt>", content "<text>" (add options {"convertToGoogleDocument": true} to make a Google Doc instead). To create a folder use resource "folder", operation "create", name "<folder name>". To find files use resource "fileFolder", operation "search", searchMethod "name", queryString "<name>", returnAll false, limit 20. Only set folderId when the user gives a real folder ID. Do NOT use httpRequest for Google Drive.
++- For Google Docs, use node type "n8n-nodes-base.googleDocs" with typeVersion 2. To create a document use operation "create" with title "<title>". To create a document that already contains text, use a Docs "create" node followed by a Docs "update" node whose documentURL is "={{ $json.id }}". To append text to an existing document use operation "update", documentURL "<document URL or ID>", actionsUi {"actionFields": [{"object": "text", "action": "insert", "text": "<text>"}]}. To read a document use operation "get" with documentURL "<document URL or ID>". Do NOT use httpRequest for Google Docs.
+ - For sending email over SMTP, use node type "n8n-nodes-base.emailSend" with typeVersion 2.1 and parameters: fromEmail "<sender>", toEmail "<recipient>", subject "<subject>", text "<body>".
+ - Google Sheets nodes (n8n-nodes-base.googleSheets) MUST include a complete "columns" parameter. Never omit it. Use this exact shape:
+   "columns": {
+diff --git a/src/services/oauth.ts b/src/services/oauth.ts
+index 343e140..a320877 100644
+--- a/src/services/oauth.ts
++++ b/src/services/oauth.ts
+@@ -4,9 +4,21 @@ import * as n8n from './n8n.js';
+ import { getUserCredential, upsertUserCredential } from '../models/UserCredential.js';
+ import { getCredentialSpec } from './credentials.js';
+ 
++const SCOPE_CALENDAR = 'https://www.googleapis.com/auth/calendar';
++const SCOPE_DRIVE = 'https://www.googleapis.com/auth/drive';
++const SCOPE_DOCS = 'https://www.googleapis.com/auth/documents';
++
++// Calendar, Drive and Docs share ONE consent screen: a single "Connect Google"
++// click grants all three scopes and links all three apps (see connectGoogleAccount).
++export const GOOGLE_WORKSPACE_APPS = ['googleCalendar', 'googleDrive', 'googleDocs'];
++const WORKSPACE_SCOPE = [SCOPE_CALENDAR, SCOPE_DRIVE, SCOPE_DOCS].join(' ');
++
+ export const GOOGLE_OAUTH_SCOPE: Record<string, string> = {
+   googleSheets: 'https://www.googleapis.com/auth/spreadsheets',
+   gmail: 'https://www.googleapis.com/auth/gmail.send',
++  googleCalendar: WORKSPACE_SCOPE,
++  googleDrive: WORKSPACE_SCOPE,
++  googleDocs: WORKSPACE_SCOPE,
+ };
+ 
+ export const GOOGLE_OAUTH_CALLBACK_PATH = '/api/credentials/oauth/google/callback';
+@@ -108,14 +120,36 @@ export async function connectGoogleAccount(opts: {
+   if (tokens.refresh_token) oauthTokenData.refresh_token = tokens.refresh_token;
+   if (tokens.expires_in) oauthTokenData.expires_in = Date.now() + Number(tokens.expires_in) * 1000;
+ 
+-  const credentialName = `AIES ${spec.label}`;
+   const data = {
+     clientId: config.google.clientId,
+     clientSecret: config.google.clientSecret,
+     oauthTokenData,
+   };
+ 
+-  const existing = await getUserCredential(opts.userId, spec.app);
++  // Workspace apps are linked together from the same tokens. The requested app
++  // is linked LAST so the frontend status poll only reports "connected" once
++  // every sibling credential already exists.
++  const appsToLink = GOOGLE_WORKSPACE_APPS.includes(opts.app)
++    ? [...GOOGLE_WORKSPACE_APPS.filter((a) => a !== opts.app), opts.app]
++    : [opts.app];
++
++  let requested: Awaited<ReturnType<typeof upsertUserCredential>> | undefined;
++  for (const appName of appsToLink) {
++    const appSpec = getCredentialSpec(appName);
++    if (!appSpec) continue;
++    const saved = await linkGoogleApp(opts.userId, appSpec, data);
++    if (appName === opts.app) requested = saved;
++  }
++  return requested!;
++}
++
++async function linkGoogleApp(
++  userId: number,
++  spec: NonNullable<ReturnType<typeof getCredentialSpec>>,
++  data: Record<string, unknown>
++) {
++  const credentialName = `AIES ${spec.label}`;
++  const existing = await getUserCredential(userId, spec.app);
+   let n8nCredentialId: string;
+   if (existing && Boolean(existing.managed)) {
+     try {
+@@ -132,7 +166,7 @@ export async function connectGoogleAccount(opts: {
+   }
+ 
+   const saved = await upsertUserCredential({
+-    user_id: opts.userId,
++    user_id: userId,
+     app: spec.app,
+     credential_type: spec.type,
+     credential_name: credentialName,
+diff --git a/src/services/pipeline.ts b/src/services/pipeline.ts
+index 64ae5e8..787da9a 100644
+--- a/src/services/pipeline.ts
++++ b/src/services/pipeline.ts
+@@ -583,6 +583,225 @@ function normalizeGoogleSheetsNode(node: N8nNode, prompt: string): void {
+ }
+ 
+ 
++function firstString(...values: unknown[]): string | undefined {
++  for (const v of values) {
++    if (typeof v === 'string' && v.trim() !== '') return v;
++  }
++  return undefined;
++}
++
++const GOOGLE_CALENDAR_NODE_TYPE = 'n8n-nodes-base.googleCalendar';
++const GOOGLE_CALENDAR_NODE_VERSION = 1.3;
++const CALENDAR_EVENT_OPERATIONS = ['create', 'getAll', 'get', 'update', 'delete'];
++
++/**
++ * The Calendar node's "id" mode only accepts e-mail style IDs (it validates and
++ * extracts with a regex), so the literal "primary" calendar must use "list" mode,
++ * where the value is passed to Google untouched.
++ */
++function toCalendarLocator(raw: unknown): { __rl: true; mode: string; value: string; cachedResultName?: string } {
++  const text = typeof raw === 'string' ? raw : (raw as any)?.value;
++  const value = String(text ?? '').trim();
++  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return { __rl: true, mode: 'id', value };
++  return { __rl: true, mode: 'list', value: 'primary', cachedResultName: 'primary' };
++}
++
++function normalizeGoogleCalendarNode(node: N8nNode): void {
++  const p = (node.parameters ?? {}) as any;
++  const wantsAvailability = p.resource === 'calendar' || p.operation === 'availability';
++  const calendar = toCalendarLocator(p.calendar ?? p.calendarId);
++
++  if (wantsAvailability) {
++    node.parameters = {
++      resource: 'calendar',
++      operation: 'availability',
++      calendar,
++      timeMin: firstString(p.timeMin, p.start) ?? '={{ $now.toISO() }}',
++      timeMax: firstString(p.timeMax, p.end) ?? "={{ $now.plus({ hours: 1 }).toISO() }}",
++      options: p.options && typeof p.options === 'object' ? p.options : {},
++    };
++    node.typeVersion = GOOGLE_CALENDAR_NODE_VERSION;
++    return;
++  }
++
++  const operation = CALENDAR_EVENT_OPERATIONS.includes(p.operation) ? p.operation : 'create';
++  const out: any = { ...p, resource: 'event', operation, calendar };
++  delete out.calendarId;
++
++  if (operation === 'create') {
++    const extra: any = out.additionalFields && typeof out.additionalFields === 'object' ? { ...out.additionalFields } : {};
++    for (const key of ['summary', 'description', 'location']) {
++      if (out[key] !== undefined) {
++        if (extra[key] === undefined) extra[key] = out[key];
++        delete out[key];
++      }
++    }
++    if (out.title !== undefined) {
++      if (extra.summary === undefined) extra.summary = out.title;
++      delete out.title;
++    }
++    if (!firstString(extra.summary)) extra.summary = 'Event from n8n';
++    out.additionalFields = extra;
++
++    out.start = firstString(out.start, out.startTime, out.startDateTime) ?? "={{ $now.plus({ hours: 1 }).toISO() }}";
++    out.end = firstString(out.end, out.endTime, out.endDateTime) ?? "={{ $now.plus({ hours: 2 }).toISO() }}";
++    delete out.startTime;
++    delete out.startDateTime;
++    delete out.endTime;
++    delete out.endDateTime;
++    if (out.useDefaultReminders === undefined) out.useDefaultReminders = true;
++  }
++
++  if (operation === 'getAll') {
++    const opts: any = out.options && typeof out.options === 'object' ? { ...out.options } : {};
++    // timeMin/timeMax are top-level parameters since node version 1.3.
++    out.timeMin = firstString(out.timeMin, opts.timeMin) ?? "={{ $now.startOf('day').toISO() }}";
++    out.timeMax = firstString(out.timeMax, opts.timeMax) ?? "={{ $now.endOf('day').toISO() }}";
++    delete opts.timeMin;
++    delete opts.timeMax;
++    delete opts.singleEvents;
++    out.options = opts;
++    out.returnAll = out.returnAll === true;
++    if (!out.returnAll) {
++      const limit = Number(out.limit);
++      out.limit = Number.isFinite(limit) && limit > 0 ? limit : 20;
++    }
++  }
++
++  node.parameters = out;
++  node.typeVersion = GOOGLE_CALENDAR_NODE_VERSION;
++}
++
++const GOOGLE_DRIVE_NODE_TYPE = 'n8n-nodes-base.googleDrive';
++const GOOGLE_DRIVE_NODE_VERSION = 3;
++
++function driveDefaultLocator() {
++  return { __rl: true, mode: 'list', value: 'My Drive' };
++}
++
++function toDriveFolderLocator(raw: unknown): { __rl: true; mode: string; value: string; cachedResultName?: string } {
++  const text = typeof raw === 'string' ? raw : (raw as any)?.value;
++  const value = String(text ?? '').trim();
++  const id = /\/folders\/([a-zA-Z0-9_-]+)/.exec(value)?.[1] ?? value;
++  if (!id || id === 'root' || /^(my ?drive|\/)$/i.test(id) || /YOUR_|PLACEHOLDER|<.*>/i.test(id)) {
++    return { __rl: true, mode: 'list', value: 'root', cachedResultName: '/ (Root folder)' };
++  }
++  return { __rl: true, mode: 'id', value: id };
++}
++
++function normalizeGoogleDriveNode(node: N8nNode): void {
++  const p = (node.parameters ?? {}) as any;
++  const resource = String(p.resource ?? '');
++  const operation = String(p.operation ?? '');
++  const hasContent = firstString(p.content, p.text, p.body, p.message) !== undefined;
++
++  node.typeVersion = GOOGLE_DRIVE_NODE_VERSION;
++
++  if (resource === 'fileFolder' || ['search', 'list', 'getAll'].includes(operation)) {
++    const limit = Number(p.limit);
++    node.parameters = {
++      resource: 'fileFolder',
++      operation: 'search',
++      searchMethod: 'name',
++      queryString: firstString(p.queryString, p.query, p.name, p.searchTerm) ?? '',
++      returnAll: p.returnAll === true,
++      limit: Number.isFinite(limit) && limit > 0 ? limit : 20,
++      filter: {},
++      options: {},
++    };
++    return;
++  }
++
++  if (resource === 'folder' && (operation === 'create' || operation === '')) {
++    node.parameters = {
++      resource: 'folder',
++      operation: 'create',
++      name: firstString(p.name, p.folderName, p.title) ?? 'New folder',
++      driveId: driveDefaultLocator(),
++      folderId: toDriveFolderLocator(p.folderId ?? p.parentFolderId ?? p.parent),
++      options: {},
++    };
++    return;
++  }
++
++  const isFileCreate =
++    (resource === 'file' || resource === '') &&
++    (operation === 'createFromText' ||
++      (['create', 'createFile', 'createTextFile', 'upload', ''].includes(operation) && hasContent));
++  if (isFileCreate) {
++    const options: any = {};
++    const convert =
++      p.options?.convertToGoogleDocument ?? p.convertToGoogleDocument ?? p.asGoogleDoc ?? p.convertToDoc;
++    if (convert === true || convert === 'true') options.convertToGoogleDocument = true;
++    node.parameters = {
++      resource: 'file',
++      operation: 'createFromText',
++      name: firstString(p.name, p.fileName, p.filename, p.title) ?? 'n8n-file.txt',
++      content: firstString(p.content, p.text, p.body, p.message) ?? '',
++      driveId: driveDefaultLocator(),
++      folderId: toDriveFolderLocator(p.folderId ?? p.folder ?? p.parentFolderId),
++      options,
++    };
++  }
++  // any other Drive operation is left exactly as generated
++}
++
++const GOOGLE_DOCS_NODE_TYPE = 'n8n-nodes-base.googleDocs';
++const GOOGLE_DOCS_NODE_VERSION = 2;
++
++function normalizeGoogleDocsNode(node: N8nNode): void {
++  const p = (node.parameters ?? {}) as any;
++  const rawOp = String(p.operation ?? '');
++  let operation = 'create';
++  if (['create', 'get', 'update'].includes(rawOp)) operation = rawOp;
++  else if (['append', 'insert', 'write', 'edit', 'updateDocument', 'insertText'].includes(rawOp)) operation = 'update';
++  else if (['read', 'getDocument'].includes(rawOp)) operation = 'get';
++
++  const documentURL = firstString(p.documentURL, p.documentUrl, p.documentId, p.url, p.id) ?? '';
++  node.typeVersion = GOOGLE_DOCS_NODE_VERSION;
++
++  if (operation === 'create') {
++    const folder = firstString(p.folderId);
++    node.parameters = {
++      resource: 'document',
++      operation: 'create',
++      title: firstString(p.title, p.name, p.documentName) ?? 'Untitled document',
++      driveId: 'myDrive',
++      folderId: folder && !/^(default|root)$/i.test(folder) && !/YOUR_|PLACEHOLDER|<.*>/i.test(folder) ? folder : 'default',
++    };
++    return;
++  }
++
++  if (operation === 'get') {
++    node.parameters = { resource: 'document', operation: 'get', documentURL, simple: p.simple !== false };
++    return;
++  }
++
++  // update
++  let fields: any[] = Array.isArray(p.actionsUi?.actionFields) ? p.actionsUi.actionFields : [];
++  const plainText = firstString(p.text, p.content, p.body, p.message);
++  if (fields.length === 0 && plainText !== undefined) fields = [{ text: plainText }];
++  fields = fields.map((f: any) => {
++    const field: any = { ...(f ?? {}) };
++    if (!field.object) field.object = 'text';
++    if (!field.action) field.action = 'insert';
++    if (field.object === 'text' && field.action === 'insert') {
++      if (field.text === undefined) field.text = '';
++      if (!field.insertSegment) field.insertSegment = 'body';
++      if (!field.locationChoice) field.locationChoice = 'endOfSegmentLocation';
++    }
++    return field;
++  });
++  node.parameters = {
++    resource: 'document',
++    operation: 'update',
++    documentURL,
++    simple: p.simple !== false,
++    actionsUi: { actionFields: fields },
++  };
++}
++
++
+ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
+   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+     throw new Error('AI response was not a JSON workflow object');
+@@ -643,6 +862,15 @@ function sanitizeWorkflow(raw: any, prompt: string): CleanWorkflow {
+     if (built.type === GOOGLE_SHEETS_NODE_TYPE) {
+       normalizeGoogleSheetsNode(built, prompt);
+     }
++    if (built.type === GOOGLE_CALENDAR_NODE_TYPE) {
++      normalizeGoogleCalendarNode(built);
++    }
++    if (built.type === GOOGLE_DRIVE_NODE_TYPE) {
++      normalizeGoogleDriveNode(built);
++    }
++    if (built.type === GOOGLE_DOCS_NODE_TYPE) {
++      normalizeGoogleDocsNode(built);
++    }
+     // AI models invent credential ids (e.g. YOUR_CREDENTIAL_ID); real
+     // credentials are injected later from the user's linked apps.
+     delete (built as any).credentials;
