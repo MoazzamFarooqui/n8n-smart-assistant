@@ -76,7 +76,7 @@ export default function Dashboard({ go, query, setQuery, filteredNodes, filtered
               <p className="muted small">Nodes</p>
             </div>
             <div className="statCard">
-              <p className="statNum">6</p>
+              <p className="statNum">9</p>
               <p className="muted small">Integrations</p>
             </div>
             <div className="statCard">
